@@ -3,6 +3,7 @@ import requests
 from urllib.parse import unquote
 import comfy.sd
 import comfy.utils
+from folder_paths import get_folder_paths
 
 class DownloadAndLoadLoraModelOnly:
     @classmethod
@@ -12,7 +13,7 @@ class DownloadAndLoadLoraModelOnly:
                 "model": ("MODEL",),
                 "lora_link": ("STRING", {}),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                "output": ("STRING", {}),
+                "file_name": ("STRING", {}),  # 现在file_name只作为文件名
             }
         }
 
@@ -20,8 +21,8 @@ class DownloadAndLoadLoraModelOnly:
     FUNCTION = "download_and_load_lora_model_only"
     CATEGORY = "loaders"
 
-    def download_and_load_lora_model_only(self, model, lora_link, strength_model, output):
-        lora_path = self.download_lora(lora_link, output)
+    def download_and_load_lora_model_only(self, model, lora_link, strength_model, file_name):
+        lora_path = self.download_lora(lora_link, file_name)
         if lora_path:
             lora = comfy.utils.load_torch_file(lora_path, safe_load=True)
             model_lora, _ = comfy.sd.load_lora_for_models(model, None, lora, strength_model, 0)
@@ -30,17 +31,16 @@ class DownloadAndLoadLoraModelOnly:
             print("Error loading Lora. Downloaded file not found.")
             return (model,)
 
-    def download_lora(self, link, output):
+    def download_lora(self, link, file_name):
         try:
-            os.makedirs(output, exist_ok=True)
-            # 获取文件名
-            filename = "example.safetensors"
-            response_head = requests.head(link, allow_redirects=True)
-            content_disposition = response_head.headers.get('Content-Disposition')
-            if content_disposition:
-                filename = content_disposition.split('filename=')[1]
-                filename = unquote(filename).strip('"')
-            downloaded_file = os.path.join(output, filename)
+            # 自动检测loras目录
+            loras_dirs = get_folder_paths("loras")
+            if not loras_dirs:
+                raise Exception("No loras directory found!")
+            loras_dir = loras_dirs[0]
+            os.makedirs(loras_dir, exist_ok=True)
+            # file_name 现在是文件名
+            downloaded_file = os.path.join(loras_dir, file_name)
             temp_file = downloaded_file + ".part"
 
             # 获取已下载部分大小

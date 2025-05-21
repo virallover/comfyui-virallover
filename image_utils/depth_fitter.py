@@ -33,15 +33,32 @@ class DepthFitter:
             raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
         return mask_np
 
+    @staticmethod
+    def _extract_gray(depth):
+        arr = depth.cpu().numpy()
+        print(f'raw depth shape: {arr.shape}')
+        if arr.ndim == 4 and arr.shape[-1] == 3:
+            arr = arr[0, :, :, 0]
+        elif arr.ndim == 4 and arr.shape[1] == 3:
+            arr = arr[0, 0]
+        elif arr.ndim == 3 and arr.shape[0] == 3:
+            arr = arr[0]
+        elif arr.ndim == 3:
+            arr = arr[0]
+        else:
+            arr = arr.squeeze()
+        return arr
+
     def fit_depth(self, new_depth, old_depth, old_mask, new_mask):
         # Convert to numpy arrays: [H, W]
-        new_depth_np = new_depth[0, 0].cpu().numpy()
-        old_depth_np = old_depth[0, 0].cpu().numpy()
+        old_depth_np = self._extract_gray(old_depth)
+        new_depth_np = self._extract_gray(new_depth)
         old_mask_np = self._to_single_mask(old_mask[0])
         new_mask_np = self._to_single_mask(new_mask[0])
         # 调试用，输出shape
         print(f"old_depth_np shape: {old_depth_np.shape}, old_mask_np shape: {old_mask_np.shape}")
         print(f"new_depth_np shape: {new_depth_np.shape}, new_mask_np shape: {new_mask_np.shape}")
+        print(f"raw old_depth shape: {old_depth.shape}, raw new_depth shape: {new_depth.shape}")
 
         # Extract old depth values under old_mask
         old_depth_masked = old_depth_np[old_mask_np > 0]

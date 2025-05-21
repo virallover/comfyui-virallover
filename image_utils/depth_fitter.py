@@ -21,9 +21,12 @@ class DepthFitter:
     @staticmethod
     def _to_single_mask(mask):
         mask_np = mask.cpu().numpy()
+        # 处理 [C, H, W]，C=1 或 C=3
         if mask_np.ndim == 3:
-            # 多通道，合成单通道
-            mask_np = np.any(mask_np > 0, axis=0).astype(np.uint8)
+            if mask_np.shape[0] == 1:
+                mask_np = mask_np[0]
+            else:
+                mask_np = np.any(mask_np > 0, axis=0).astype(np.uint8)
         elif mask_np.ndim == 2:
             pass
         else:
@@ -36,6 +39,9 @@ class DepthFitter:
         old_depth_np = old_depth[0, 0].cpu().numpy()
         old_mask_np = self._to_single_mask(old_mask[0])
         new_mask_np = self._to_single_mask(new_mask[0])
+        # 调试用，输出shape
+        print(f"old_depth_np shape: {old_depth_np.shape}, old_mask_np shape: {old_mask_np.shape}")
+        print(f"new_depth_np shape: {new_depth_np.shape}, new_mask_np shape: {new_mask_np.shape}")
 
         # Extract old depth values under old_mask
         old_depth_masked = old_depth_np[old_mask_np > 0]

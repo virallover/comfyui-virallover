@@ -1,3 +1,4 @@
+from skimage.transform import resize
 import numpy as np
 import torch
 
@@ -50,7 +51,7 @@ class DepthFitter:
         return arr
 
     def fit_depth(self, new_depth, old_depth, old_mask, new_mask):
-        # Convert to numpy arrays: [H, W]
+        # Convert to numpy arrays
         old_depth_np = self._extract_gray(old_depth)
         new_depth_np = self._extract_gray(new_depth)
         old_mask_np = self._to_single_mask(old_mask[0])
@@ -59,6 +60,18 @@ class DepthFitter:
         print(f"old_depth_np shape: {old_depth_np.shape}, old_mask_np shape: {old_mask_np.shape}")
         print(f"new_depth_np shape: {new_depth_np.shape}, new_mask_np shape: {new_mask_np.shape}")
         print(f"raw old_depth shape: {old_depth.shape}, raw new_depth shape: {new_depth.shape}")
+
+        # resize depth 到 mask 的 shape
+        if old_depth_np.shape != old_mask_np.shape:
+            print(f"Resizing old_depth from {old_depth_np.shape} to {old_mask_np.shape}")
+            old_depth_np = resize(
+                old_depth_np, old_mask_np.shape, order=1, preserve_range=True, anti_aliasing=True
+            ).astype(np.float32)
+        if new_depth_np.shape != new_mask_np.shape:
+            print(f"Resizing new_depth from {new_depth_np.shape} to {new_mask_np.shape}")
+            new_depth_np = resize(
+                new_depth_np, new_mask_np.shape, order=1, preserve_range=True, anti_aliasing=True
+            ).astype(np.float32)
 
         # Extract old depth values under old_mask
         old_depth_masked = old_depth_np[old_mask_np > 0]

@@ -18,12 +18,24 @@ class DepthFitter:
     FUNCTION = "fit_depth"
     CATEGORY = "custom"
 
+    @staticmethod
+    def _to_single_mask(mask):
+        mask_np = mask.cpu().numpy()
+        if mask_np.ndim == 3:
+            # 多通道，合成单通道
+            mask_np = np.any(mask_np > 0, axis=0).astype(np.uint8)
+        elif mask_np.ndim == 2:
+            pass
+        else:
+            raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
+        return mask_np
+
     def fit_depth(self, new_depth, old_depth, old_mask, new_mask):
         # Convert to numpy arrays: [H, W]
         new_depth_np = new_depth[0, 0].cpu().numpy()
         old_depth_np = old_depth[0, 0].cpu().numpy()
-        old_mask_np = old_mask[0].cpu().numpy()
-        new_mask_np = new_mask[0].cpu().numpy()
+        old_mask_np = self._to_single_mask(old_mask[0])
+        new_mask_np = self._to_single_mask(new_mask[0])
 
         # Extract old depth values under old_mask
         old_depth_masked = old_depth_np[old_mask_np > 0]

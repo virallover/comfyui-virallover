@@ -14,8 +14,8 @@ class DepthFitter:
             }
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("fitted_depth",)
+    RETURN_TYPES = ("IMAGE", "MASK")
+    RETURN_NAMES = ("fitted_depth", "final_mask")
     FUNCTION = "fit_depth"
     CATEGORY = "custom"
 
@@ -101,7 +101,16 @@ class DepthFitter:
                 + old_min
             )
 
-        # Convert back to tensor: [1, 1, H, W]
-        result = torch.from_numpy(aligned).unsqueeze(0).unsqueeze(0).to(dtype=new_depth.dtype)
+        # Convert back to tensor: [1, H, W]
+        result = torch.from_numpy(aligned).unsqueeze(0).to(dtype=new_depth.dtype)
 
-        return (result,)
+        # 计算 final_mask
+        # 1. 按深度关系赋值
+        final_mask_np = np.zeros_like(aligned, dtype=np.float32)
+        final_mask_np[new_mask_np > 0] = (aligned[new_mask_np > 0] < old_depth_np[new_mask_np > 0]).astype(np.float32)
+        # 2. 强制重叠区域为1
+        overlap = (old_mask_np > 0) & (new_mask_np > 0)
+        final_mask_np[overlap] = 1.0
+        final_mask = torch.from_numpy(final_mask_np).unsqueeze(0)  # [1, H, W]
+
+        return (result, final_mask)

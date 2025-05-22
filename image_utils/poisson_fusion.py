@@ -81,8 +81,12 @@ class PoissonImageFusion:
                 print("[WARNING] Mask 非法，默认使用图像中心作为融合中心")
                 center = (w // 2, h // 2)
             else:
-                center = (int(xs.mean()), int(ys.mean()))
-
+                cx = int(xs.mean())
+                cy = int(ys.mean())
+                # 修正越界
+                cx = min(max(cx, 0), w - 1)
+                cy = min(max(cy, 0), h - 1)
+                center = (cx, cy)
             print(f"[DEBUG] Blending center: {center}")
 
             # 泊松融合

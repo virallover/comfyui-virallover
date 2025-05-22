@@ -52,41 +52,30 @@ class DepthFitter:
         return arr
 
     @staticmethod
-    def warp_depth_by_masked_distribution(old_depth_np, new_depth_np, new_mask_np, bins=1000):
-        """
-        将 old_depth 在 new_mask 区域的像素值分布压缩成 new_depth 中对应区域的分布，其它区域设为0。
+    def warp_depth_by_cdf(old_depth, old_mask, new_depth, new_mask):
+        old_values = old_depth[old_mask > 0].flatten()
+        new_values = new_depth[new_mask > 0].flatten()
 
-        参数:
-            old_depth_np: 原深度图，shape [H, W]
-            new_depth_np: 新深度图，shape [H, W]
-            new_mask_np: 二值掩码图，shape [H, W]，值为 0 或 1
-            bins: 拟合精度（histogram bin 数）
+        if old_values.size == 0 or new_values.size == 0:
+            # 返回全 0 图，形状和 new_depth 一样
+            return np.zeros_like(new_depth)
 
-        返回:
-            warped_depth: np.ndarray，mask 区域值被压缩，其他区域为0
-        """
-        # 1. 提取掩码区域的深度值
-        old_vals = old_depth_np[new_mask_np > 0]
-        new_vals = new_depth_np[new_mask_np > 0]
+        # 排序两个集合
+        old_sorted = np.sort(old_values)
+        new_sorted = np.sort(new_values)
 
-        # 2. 构建 CDF 和反 CDF
-        old_hist, old_edges = np.histogram(old_vals, bins=bins, density=True)
-        old_cdf = np.cumsum(old_hist) / np.sum(old_hist)
-        old_centers = (old_edges[:-1] + old_edges[1:]) / 2
-        value_to_cdf = interp1d(old_centers, old_cdf, bounds_error=False, fill_value=(0.0, 1.0))
+        # new_mask 区域内每个像素的 rank 值 → 转为 CDF 值
+        new_ranks = new_values.argsort().argsort()
+        cdf_indices = new_ranks / (len(new_ranks) - 1)
 
-        new_hist, new_edges = np.histogram(new_vals, bins=bins, density=True)
-        new_cdf = np.cumsum(new_hist) / np.sum(new_hist)
-        new_centers = (new_edges[:-1] + new_edges[1:]) / 2
-        cdf_to_value = interp1d(new_cdf, new_centers, bounds_error=False, fill_value=(new_centers[0], new_centers[-1]))
+        # 根据 CDF 插值映射到 old_sorted（目标分布）
+        mapped_values = np.interp(cdf_indices, np.linspace(0, 1, len(old_sorted)), old_sorted)
 
-        # 3. 执行变换
-        warped = np.zeros_like(old_depth_np)  # 其他区域设为0
-        cdf_vals = value_to_cdf(old_vals)
-        warped_vals = cdf_to_value(cdf_vals)
-        warped[new_mask_np > 0] = warped_vals
+        # 输出图：默认全 0，仅保留 new_mask 区域
+        result = np.zeros_like(new_depth)
+        result[new_mask > 0] = mapped_values
 
-        return warped
+        return result
 
     def fit_depth(self, new_depth, old_depth, old_mask, new_mask):
         # Convert to numpy arrays
@@ -114,8 +103,8 @@ class DepthFitter:
         print("old_depth min/max:", np.min(old_depth_np), np.max(old_depth_np))
         print("new_depth min/max:", np.min(new_depth_np), np.max(new_depth_np))
 
-        # 用 warp_depth_by_masked_distribution 拟合 old_depth 到 new_depth 的分布，仅在 new_mask 区域
-        aligned = self.warp_depth_by_masked_distribution(old_depth_np, new_depth_np, new_mask_np)
+        # 用 warp_depth_by_cdf 拟合 new_mask 区域的深度分布到 old_depth 区域
+        aligned = self.warp_depth_by_cdf(old_depth_np, old_mask_np, new_depth_np, new_mask_np)
         print("aligned min/max:", np.min(aligned), np.max(aligned))
 
         # Convert back to tensor: [1, H, W]

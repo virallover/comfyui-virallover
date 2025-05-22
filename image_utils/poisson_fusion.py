@@ -32,13 +32,18 @@ class PoissonImageFusion:
         bg = background_image[0].cpu().numpy()
         mask_np = self._to_single_mask(blurred_mask[0])
 
-        if fg.shape[0] == 3:
+        # 兼容 [3, H, W] 和 [H, W, 3]
+        if fg.ndim == 3 and fg.shape[0] == 3:
             fg_np = np.transpose(fg, (1, 2, 0))
+        elif fg.ndim == 3 and fg.shape[2] == 3:
+            fg_np = fg
         else:
             raise ValueError(f"Invalid fg shape: {fg.shape}")
 
-        if bg.shape[0] == 3:
+        if bg.ndim == 3 and bg.shape[0] == 3:
             bg_np = np.transpose(bg, (1, 2, 0))
+        elif bg.ndim == 3 and bg.shape[2] == 3:
+            bg_np = bg
         else:
             raise ValueError(f"Invalid bg shape: {bg.shape}")
 

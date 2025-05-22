@@ -90,7 +90,16 @@ class PoissonImageFusion:
 
             # 回转为 tensor
             blended_tensor = torch.from_numpy(blended.astype(np.float32) / 255.0).permute(2, 0, 1).unsqueeze(0)
-            return (blended_tensor,)
+            print(f"[DEBUG] Output blended_tensor shape: {blended_tensor.shape}")
+
+            # 强制修正为 [1, 3, H, W]
+            if blended_tensor.ndim == 4 and blended_tensor.shape[1] == 3:
+                return (blended_tensor,)
+            elif blended_tensor.ndim == 3 and blended_tensor.shape[0] == 3:
+                blended_tensor = blended_tensor.unsqueeze(0)
+                return (blended_tensor,)
+            else:
+                raise RuntimeError(f"泊松融合输出 shape 异常: {blended_tensor.shape}")
 
         except Exception as e:
             print(f"[ERROR] PoissonImageFusion 失败: {str(e)}")

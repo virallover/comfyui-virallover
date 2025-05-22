@@ -29,11 +29,26 @@ class PoissonImageFusion:
         bg_np = (np.clip(bg_np, 0, 1) * 255).astype(np.uint8)
         mask_np = (np.clip(mask_np, 0, 1) * 255).astype(np.uint8)
 
-        # 转为3通道mask
+        # 保证 mask 是单通道 [H, W]
+        if mask_np.ndim == 3 and mask_np.shape[0] == 1:
+            mask_np = mask_np[0]
+        if mask_np.ndim == 3 and mask_np.shape[2] == 1:
+            mask_np = mask_np[:, :, 0]
+        if mask_np.ndim == 2:
+            mask_np = mask_np  # [H, W]
+        # mask 必须和 fg/bg shape 一致，扩展为三通道
         if mask_np.ndim == 2:
             mask_np = cv2.merge([mask_np]*3)
+        # 再次确保 shape 完全一致
+        mask_np = mask_np[:fg_np.shape[0], :fg_np.shape[1], :3]
+        fg_np = fg_np[:bg_np.shape[0], :bg_np.shape[1], :3]
+        bg_np = bg_np[:fg_np.shape[0], :fg_np.shape[1], :3]
 
-        # 定位融合中心：可设置为 mask 的中心
+        # shape 检查
+        if fg_np.shape != bg_np.shape or fg_np.shape != mask_np.shape:
+            raise ValueError(f"[PoissonImageFusion] shape mismatch: fg_np {fg_np.shape}, bg_np {bg_np.shape}, mask_np {mask_np.shape}")
+
+        # 定位融合中心
         ys, xs = np.where(mask_np[:, :, 0] > 10)
         if len(xs) == 0 or len(ys) == 0:
             center = (bg_np.shape[1] // 2, bg_np.shape[0] // 2)

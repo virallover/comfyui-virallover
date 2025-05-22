@@ -92,6 +92,16 @@ class PoissonImageFusion:
             # 泊松融合
             blended = cv2.seamlessClone(fg_np, bg_np, mask_np, center, cv2.NORMAL_CLONE)
 
+            # 保证输出为 3 通道
+            if blended.ndim == 2:
+                blended = cv2.cvtColor(blended, cv2.COLOR_GRAY2RGB)
+            elif blended.shape[2] == 1:
+                blended = cv2.cvtColor(blended, cv2.COLOR_GRAY2RGB)
+            elif blended.shape[2] != 3:
+                raise RuntimeError(f"[PoissonImageFusion] cv2.seamlessClone 输出通道数异常: {blended.shape}")
+
+            print(f"[DEBUG] mask_np after merge: {mask_np.shape}, dtype: {mask_np.dtype}, min: {mask_np.min()}, max: {mask_np.max()}")
+
             # 回转为 tensor
             blended_tensor = torch.from_numpy(blended).float() / 255.0  # 保留 float32 类型
             blended_tensor = blended_tensor.permute(2, 0, 1).unsqueeze(0)  # [H, W, 3] -> [1, 3, H, W]

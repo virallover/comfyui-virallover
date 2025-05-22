@@ -15,6 +15,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DownloadAndLoadLoraModelOnly": "Download and Load Lora Model Only",
     "DepthFitter": "Depth Fitter",
     "PoissonImageFusion": "Poisson Image Fusion",
+    "DebugShape": "Debug Shape",
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']

@@ -106,3 +106,15 @@ class PoissonImageFusion:
         except Exception as e:
             print(f"[ERROR] PoissonImageFusion 失败: {str(e)}")
             raise RuntimeError(f"泊松融合失败: {str(e)}")
+
+class DebugShape:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"image": ("IMAGE",)}}
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "debug"
+    CATEGORY = "debug"
+
+    def debug(self, image):
+        print(f"[DEBUG] DebugShape input shape: {image.shape if hasattr(image, 'shape') else type(image)}")
+        return (image,)

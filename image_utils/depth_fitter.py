@@ -2,6 +2,7 @@ from skimage.transform import resize
 import numpy as np
 import torch
 from scipy.interpolate import interp1d
+from scipy.interpolate import Rbf
 
 class DepthFitter:
     @classmethod
@@ -52,28 +53,33 @@ class DepthFitter:
         return arr
 
     @staticmethod
-    def warp_depth_by_cdf(old_depth, old_mask, new_depth, new_mask):
-        old_values = old_depth[old_mask > 0].flatten()
-        new_values = new_depth[new_mask > 0].flatten()
+    def tps_depth_warp(old_depth, old_mask, new_mask):
+        """
+        使用TPS（Thin Plate Spline）将 old_mask 区域的深度结构挤压映射到 new_mask 区域。
+        返回一张深度图，仅在 new_mask 区域有效，其余为0。
+        """
+        # 1. 提取 old_mask 区域坐标和值
+        old_coords = np.argwhere(old_mask > 0)
+        if old_coords.shape[0] < 3:
+            return np.zeros_like(old_depth)  # 不足以做拟合
+        old_z = old_depth[old_mask > 0]
 
-        if old_values.size == 0 or new_values.size == 0:
-            # 返回全 0 图，形状和 new_depth 一样
-            return np.zeros_like(new_depth)
+        # 2. 提取 new_mask 区域坐标
+        new_coords = np.argwhere(new_mask > 0)
+        if new_coords.shape[0] < 3:
+            return np.zeros_like(old_depth)
 
-        # 排序两个集合
-        old_sorted = np.sort(old_values)
-        new_sorted = np.sort(new_values)
+        # 3. 创建 TPS 插值函数（使用RBF模拟TPS）
+        old_x, old_y = old_coords[:, 1], old_coords[:, 0]  # (x, y)
+        rbf_func = Rbf(old_x, old_y, old_z, function='thin_plate', smooth=1e-5)
 
-        # new_mask 区域内每个像素的 rank 值 → 转为 CDF 值
-        new_ranks = new_values.argsort().argsort()
-        cdf_indices = new_ranks / (len(new_ranks) - 1)
+        # 4. 应用于 new_mask 区域坐标
+        new_x, new_y = new_coords[:, 1], new_coords[:, 0]
+        new_z = rbf_func(new_x, new_y)
 
-        # 根据 CDF 插值映射到 old_sorted（目标分布）
-        mapped_values = np.interp(cdf_indices, np.linspace(0, 1, len(old_sorted)), old_sorted)
-
-        # 输出图：默认全 0，仅保留 new_mask 区域
-        result = np.zeros_like(new_depth)
-        result[new_mask > 0] = mapped_values
+        # 5. 构建输出深度图
+        result = np.zeros_like(old_depth)
+        result[new_coords[:, 0], new_coords[:, 1]] = new_z
 
         return result
 
@@ -103,8 +109,8 @@ class DepthFitter:
         print("old_depth min/max:", np.min(old_depth_np), np.max(old_depth_np))
         print("new_depth min/max:", np.min(new_depth_np), np.max(new_depth_np))
 
-        # 用 warp_depth_by_cdf 拟合 new_mask 区域的深度分布到 old_depth 区域
-        aligned = self.warp_depth_by_cdf(old_depth_np, old_mask_np, new_depth_np, new_mask_np)
+        # 用 tps_depth_warp 拟合 old_mask 区域深度到 new_mask 区域
+        aligned = self.tps_depth_warp(old_depth_np, old_mask_np, new_mask_np)
         print("aligned min/max:", np.min(aligned), np.max(aligned))
 
         # Convert back to tensor: [1, H, W]

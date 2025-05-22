@@ -17,17 +17,32 @@ class PoissonImageFusion:
     RETURN_NAMES = ("blended_image",)
     FUNCTION = "fuse"
     CATEGORY = "custom"
-
+   
+    @staticmethod
+    def _to_single_mask(mask):
+        mask_np = mask.cpu().numpy()
+        # 处理 [C, H, W]，C=1 或 C=3
+        if mask_np.ndim == 3:
+            if mask_np.shape[0] == 1:
+                mask_np = mask_np[0]
+            else:
+                mask_np = np.any(mask_np > 0, axis=0).astype(np.uint8)
+        elif mask_np.ndim == 2:
+            pass
+        else:
+            raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
+        return mask_np
+    
     def fuse(self, new_image, blurred_mask, background_image):
         try:
             # 解包 tensor → numpy
             fg = new_image[0].cpu().numpy()
             bg = background_image[0].cpu().numpy()
-            mask = blurred_mask[0].cpu().numpy()
+            mask_np = self._to_single_mask(blurred_mask[0])
 
             print(f"[DEBUG] Input fg shape: {fg.shape}")
             print(f"[DEBUG] Input bg shape: {bg.shape}")
-            print(f"[DEBUG] Input mask shape: {mask.shape}")
+            print(f"[DEBUG] Input mask shape: {mask_np.shape}")
 
             # 兼容 [C, H, W] 或 [H, W, C]
             if fg.ndim == 3 and fg.shape[0] == 3:
@@ -44,16 +59,6 @@ class PoissonImageFusion:
             else:
                 raise ValueError(f"[PoissonImageFusion] bg shape不支持: {bg.shape}")
 
-            # mask 兼容 [1, H, W]、[H, W, 1]、[H, W]
-            if mask.ndim == 3 and mask.shape[0] == 1:
-                mask_np = mask[0]
-            elif mask.ndim == 3 and mask.shape[2] == 1:
-                mask_np = mask[:, :, 0]
-            elif mask.ndim == 2:
-                mask_np = mask
-            else:
-                raise ValueError(f"[PoissonImageFusion] mask shape不支持: {mask.shape}")
-
             # 归一化
             fg_np = (np.clip(fg_np, 0, 1) * 255).astype(np.uint8)
             bg_np = (np.clip(bg_np, 0, 1) * 255).astype(np.uint8)
@@ -64,19 +69,18 @@ class PoissonImageFusion:
             w = min(fg_np.shape[1], bg_np.shape[1], mask_np.shape[1])
             fg_np = fg_np[:h, :w, :]
             bg_np = bg_np[:h, :w, :]
-            if mask_np.ndim == 2:
-                mask_np = cv2.merge([mask_np[:h, :w]] * 3)
-            else:
-                mask_np = mask_np[:h, :w, :3]
+            mask_np = mask_np[:h, :w]
 
             print(f"[DEBUG] Resized fg/bg/mask to: {fg_np.shape}")
 
             # shape 检查
-            if fg_np.shape != bg_np.shape or fg_np.shape != mask_np.shape:
-                raise ValueError(f"[PoissonImageFusion] shape mismatch: fg_np {fg_np.shape}, bg_np {bg_np.shape}, mask_np {mask_np.shape}")
+            if fg_np.shape != bg_np.shape:
+                raise ValueError(f"[PoissonImageFusion] shape mismatch: fg_np {fg_np.shape}, bg_np {bg_np.shape}")
+            if mask_np.shape != fg_np.shape[:2]:
+                raise ValueError(f"[PoissonImageFusion] mask shape mismatch: mask_np {mask_np.shape}, fg_np {fg_np.shape}")
 
             # 中心点定位
-            ys, xs = np.where(mask_np[:, :, 0] > 10)
+            ys, xs = np.where(mask_np > 10)
             if len(xs) == 0 or len(ys) == 0:
                 print("[WARNING] Mask 非法，默认使用图像中心作为融合中心")
                 center = (w // 2, h // 2)
@@ -104,7 +108,6 @@ class PoissonImageFusion:
             elif blended.shape[2] != 3:
                 raise RuntimeError(f"[ERROR] cv2 返回的图像通道数非法: {blended.shape}")
 
-
             print(f"[DEBUG] mask_np after merge: {mask_np.shape}, dtype: {mask_np.dtype}, min: {mask_np.min()}, max: {mask_np.max()}")
 
             # 回转为 tensor
@@ -120,7 +123,6 @@ class PoissonImageFusion:
             print(f"[DEBUG] PoissonImageFusion output shape: {blended_tensor.shape}")
 
             return (blended_tensor,)
-
 
         except Exception as e:
             print(f"[ERROR] PoissonImageFusion 失败: {str(e)}")

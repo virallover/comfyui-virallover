@@ -1,6 +1,6 @@
 from .lora_downloader import DownloadAndLoadLoraModelOnly
 from .image_utils.depth_fitter import DepthFitter
-from .image_utils.poisson_fusion import PoissonImageFusion, DebugShape, OnlyRGBImage
+from .image_utils.poisson_fusion import PoissonImageFusion, DebugShape
 
 
 # 注册到NODE_CLASS_MAPPINGS
@@ -10,7 +10,6 @@ NODE_CLASS_MAPPINGS = {
     "DepthFitter": DepthFitter,
     "PoissonImageFusion": PoissonImageFusion,
     "DebugShape": DebugShape,
-    "OnlyRGBImage": OnlyRGBImage,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -18,7 +17,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DepthFitter": "Depth Fitter",
     "PoissonImageFusion": "Poisson Image Fusion",
     "DebugShape": "Debug Shape",
-    "OnlyRGBImage": "Only RGB Image",
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']

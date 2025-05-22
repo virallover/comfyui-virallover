@@ -111,12 +111,16 @@ class PoissonImageFusion:
             blended_tensor = torch.from_numpy(blended).float() / 255.0  # 保留 float32 类型
             blended_tensor = blended_tensor.permute(2, 0, 1).unsqueeze(0)  # [H, W, 3] -> [1, 3, H, W]
 
-            # 确保保存兼容性
-            if blended_tensor.shape[1] != 3:
-                raise RuntimeError(f"[PoissonImageFusion] 输出必须是 RGB 图像，但得到 {blended_tensor.shape}")
+            if not isinstance(blended_tensor, torch.Tensor):
+                raise RuntimeError("返回结果不是 tensor 类型")
+
+            if blended_tensor.ndim != 4 or blended_tensor.shape[1] != 3:
+                raise RuntimeError(f"[PoissonImageFusion] 输出维度非法: {blended_tensor.shape}")
 
             print(f"[DEBUG] PoissonImageFusion output shape: {blended_tensor.shape}")
+
             return (blended_tensor,)
+
 
         except Exception as e:
             print(f"[ERROR] PoissonImageFusion 失败: {str(e)}")
@@ -137,41 +141,3 @@ class DebugShape:
         if hasattr(image, 'shape') and (image.shape[1] != 3 or image.ndim != 4):
             print(f"[ERROR] DebugShape: 非 RGB 4D 图像，实际 shape: {image.shape}")
         return (image,)
-
-class OnlyRGBImage:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"image": ("IMAGE",)}}
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "filter"
-    CATEGORY = "debug"
-
-    def filter(self, image):
-        # 支持 batch/list
-        if isinstance(image, list):
-            filtered = []
-            for idx, img in enumerate(image):
-                if hasattr(img, "shape") and img.ndim == 4 and img.shape[1] == 3:
-                    filtered.append(img)
-                else:
-                    print(f"[OnlyRGBImage] 跳过非 RGB 图像: idx={idx}, shape={getattr(img, 'shape', type(img))}")
-            if not filtered:
-                raise RuntimeError("OnlyRGBImage: 没有合法的 RGB 图像")
-            return (filtered,)
-        else:
-            if hasattr(image, "shape") and image.ndim == 4 and image.shape[1] == 3:
-                return (image,)
-            else:
-                raise RuntimeError(f"OnlyRGBImage: 输入不是合法 RGB 图像，shape={getattr(image, 'shape', type(image))}")
-
-# 节点注册
-NODE_CLASS_MAPPINGS = {
-    "PoissonImageFusion": PoissonImageFusion,
-    "DebugShape": DebugShape,
-    "OnlyRGBImage": OnlyRGBImage,
-}
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "PoissonImageFusion": "泊松融合 (PoissonImageFusion)",
-    "DebugShape": "调试图像Shape (DebugShape)",
-    "OnlyRGBImage": "仅RGB图像 (OnlyRGBImage)",
-}

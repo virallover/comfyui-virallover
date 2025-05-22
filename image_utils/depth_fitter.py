@@ -105,12 +105,15 @@ class DepthFitter:
         result = torch.from_numpy(aligned).unsqueeze(0).to(dtype=new_depth.dtype)
 
         # 计算 final_mask
-        # 1. 按深度关系赋值
+        # 1. 先计算"新人物在前"的区域
         final_mask_np = np.zeros_like(aligned, dtype=np.float32)
-        final_mask_np[new_mask_np > 0] = (aligned[new_mask_np > 0] < old_depth_np[new_mask_np > 0]).astype(np.float32)
-        # 2. 强制重叠区域为1
-        overlap = (old_mask_np > 0) & (new_mask_np > 0)
-        final_mask_np[overlap] = 1.0
-        final_mask = torch.from_numpy(final_mask_np).unsqueeze(0)  # [1, H, W]
+        in_new = (new_mask_np > 0)
+        in_front = (aligned < old_depth_np)
+        # 2. 只要 new_mask 区域内，且（新人物在前 或 old_mask 与 new_mask 重叠），就为1
+        overlap = (old_mask_np > 0) & in_new
+        final_mask_np[in_new] = (in_front[in_new]).astype(np.float32)
+        final_mask_np[overlap] = 1.0  # 强制重叠为1
+
+        final_mask = torch.from_numpy(final_mask_np).unsqueeze(0)
 
         return (result, final_mask)

@@ -126,5 +126,9 @@ class DebugShape:
     CATEGORY = "debug"
 
     def debug(self, image):
-        print(f"[DEBUG] DebugShape input shape: {image.shape if hasattr(image, 'shape') else type(image)}")
+        print(f"[DEBUG] DebugShape input shape: {getattr(image, 'shape', type(image))}, dtype: {getattr(image, 'dtype', None)}")
+        if hasattr(image, 'min') and hasattr(image, 'max'):
+            print(f"[DEBUG] DebugShape min: {image.min()}, max: {image.max()}")
+        if hasattr(image, 'shape') and (image.shape[1] != 3 or image.ndim != 4):
+            print(f"[ERROR] DebugShape: 非 RGB 4D 图像，实际 shape: {image.shape}")
         return (image,)

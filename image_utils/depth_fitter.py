@@ -60,6 +60,7 @@ class DepthFitter:
         print(f"old_depth_np shape: {old_depth_np.shape}, old_mask_np shape: {old_mask_np.shape}")
         print(f"new_depth_np shape: {new_depth_np.shape}, new_mask_np shape: {new_mask_np.shape}")
         print(f"raw old_depth shape: {old_depth.shape}, raw new_depth shape: {new_depth.shape}")
+        
 
         # resize depth 到 mask 的 shape
         if old_depth_np.shape != old_mask_np.shape:
@@ -73,6 +74,9 @@ class DepthFitter:
                 new_depth_np, new_mask_np.shape, order=1, preserve_range=True, anti_aliasing=True
             ).astype(np.float32)
 
+        print("old_depth min/max:", np.min(old_depth_np), np.max(old_depth_np))
+        print("new_depth min/max:", np.min(new_depth_np), np.max(new_depth_np))
+
         # Extract old depth values under old_mask
         old_depth_masked = old_depth_np[old_mask_np > 0]
 
@@ -81,13 +85,13 @@ class DepthFitter:
         else:
             old_min = np.min(old_depth_masked)
             old_max = np.max(old_depth_masked)
-
+        print("old_min/max under mask:", old_min, old_max)
         # Extract new depth values under new_mask
         new_depth_masked = new_depth_np[new_mask_np > 0]
 
         new_min = np.min(new_depth_masked) if new_depth_masked.size > 0 else 0.0
         new_max = np.max(new_depth_masked) if new_depth_masked.size > 0 else 1.0
-
+        print("new_min/max under mask:", new_min, new_max)
         # Prepare output map (default: 0)
         aligned = np.zeros_like(new_depth_np)
 
@@ -100,6 +104,7 @@ class DepthFitter:
                 / (new_max - new_min)
                 + old_min
             )
+        print("aligned min/max:", np.min(aligned), np.max(aligned))
 
         # Convert back to tensor: [1, H, W]
         result = torch.from_numpy(aligned).unsqueeze(0).to(dtype=new_depth.dtype)
@@ -109,7 +114,7 @@ class DepthFitter:
         overlap = (old_mask_np > 0) & (new_mask_np > 0)
         # 2. 非重叠区域（new_mask=1 且 old_mask=0）根据深度比较
         non_overlap = (old_mask_np == 0) & (new_mask_np > 0)
-        in_front = (aligned < old_depth_np)
+        in_front = (aligned > old_depth_np)
 
         final_mask_np = np.zeros_like(aligned, dtype=np.float32)
         final_mask_np[overlap] = 1.0

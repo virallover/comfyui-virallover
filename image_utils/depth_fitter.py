@@ -1,6 +1,7 @@
 from skimage.transform import resize
 import numpy as np
 import torch
+from scipy.interpolate import interp1d
 
 class DepthFitter:
     @classmethod
@@ -50,6 +51,43 @@ class DepthFitter:
             arr = arr.squeeze()
         return arr
 
+    @staticmethod
+    def warp_depth_by_masked_distribution(old_depth_np, new_depth_np, new_mask_np, bins=1000):
+        """
+        将 old_depth 在 new_mask 区域的像素值分布压缩成 new_depth 中对应区域的分布，其它区域设为0。
+
+        参数:
+            old_depth_np: 原深度图，shape [H, W]
+            new_depth_np: 新深度图，shape [H, W]
+            new_mask_np: 二值掩码图，shape [H, W]，值为 0 或 1
+            bins: 拟合精度（histogram bin 数）
+
+        返回:
+            warped_depth: np.ndarray，mask 区域值被压缩，其他区域为0
+        """
+        # 1. 提取掩码区域的深度值
+        old_vals = old_depth_np[new_mask_np > 0]
+        new_vals = new_depth_np[new_mask_np > 0]
+
+        # 2. 构建 CDF 和反 CDF
+        old_hist, old_edges = np.histogram(old_vals, bins=bins, density=True)
+        old_cdf = np.cumsum(old_hist) / np.sum(old_hist)
+        old_centers = (old_edges[:-1] + old_edges[1:]) / 2
+        value_to_cdf = interp1d(old_centers, old_cdf, bounds_error=False, fill_value=(0.0, 1.0))
+
+        new_hist, new_edges = np.histogram(new_vals, bins=bins, density=True)
+        new_cdf = np.cumsum(new_hist) / np.sum(new_hist)
+        new_centers = (new_edges[:-1] + new_edges[1:]) / 2
+        cdf_to_value = interp1d(new_cdf, new_centers, bounds_error=False, fill_value=(new_centers[0], new_centers[-1]))
+
+        # 3. 执行变换
+        warped = np.zeros_like(old_depth_np)  # 其他区域设为0
+        cdf_vals = value_to_cdf(old_vals)
+        warped_vals = cdf_to_value(cdf_vals)
+        warped[new_mask_np > 0] = warped_vals
+
+        return warped
+
     def fit_depth(self, new_depth, old_depth, old_mask, new_mask):
         # Convert to numpy arrays
         old_depth_np = self._extract_gray(old_depth)
@@ -61,7 +99,6 @@ class DepthFitter:
         print(f"new_depth_np shape: {new_depth_np.shape}, new_mask_np shape: {new_mask_np.shape}")
         print(f"raw old_depth shape: {old_depth.shape}, raw new_depth shape: {new_depth.shape}")
         
-
         # resize depth 到 mask 的 shape
         if old_depth_np.shape != old_mask_np.shape:
             print(f"Resizing old_depth from {old_depth_np.shape} to {old_mask_np.shape}")
@@ -77,33 +114,8 @@ class DepthFitter:
         print("old_depth min/max:", np.min(old_depth_np), np.max(old_depth_np))
         print("new_depth min/max:", np.min(new_depth_np), np.max(new_depth_np))
 
-        # Extract old depth values under old_mask
-        old_depth_masked = old_depth_np[old_mask_np > 0]
-
-        if old_depth_masked.size == 0:
-            old_min, old_max = 0.0, 1.0
-        else:
-            old_min = np.min(old_depth_masked)
-            old_max = np.max(old_depth_masked)
-        print("old_min/max under mask:", old_min, old_max)
-        # Extract new depth values under new_mask
-        new_depth_masked = new_depth_np[new_mask_np > 0]
-
-        new_min = np.min(new_depth_masked) if new_depth_masked.size > 0 else 0.0
-        new_max = np.max(new_depth_masked) if new_depth_masked.size > 0 else 1.0
-        print("new_min/max under mask:", new_min, new_max)
-        # Prepare output map (default: 0)
-        aligned = np.zeros_like(new_depth_np)
-
-        if abs(new_max - new_min) < 1e-6:
-            aligned[new_mask_np > 0] = (old_min + old_max) / 2
-        else:
-            aligned[new_mask_np > 0] = (
-                (new_depth_np[new_mask_np > 0] - new_min)
-                * (old_max - old_min)
-                / (new_max - new_min)
-                + old_min
-            )
+        # 用 warp_depth_by_masked_distribution 拟合 old_depth 到 new_depth 的分布，仅在 new_mask 区域
+        aligned = self.warp_depth_by_masked_distribution(old_depth_np, new_depth_np, new_mask_np)
         print("aligned min/max:", np.min(aligned), np.max(aligned))
 
         # Convert back to tensor: [1, H, W]
@@ -114,7 +126,7 @@ class DepthFitter:
         overlap = (old_mask_np > 0) & (new_mask_np > 0)
         # 2. 非重叠区域（new_mask=1 且 old_mask=0）根据深度比较
         non_overlap = (old_mask_np == 0) & (new_mask_np > 0)
-        in_front = (aligned > old_depth_np)
+        in_front = (new_depth_np < aligned)
 
         final_mask_np = np.zeros_like(aligned, dtype=np.float32)
         final_mask_np[overlap] = 1.0

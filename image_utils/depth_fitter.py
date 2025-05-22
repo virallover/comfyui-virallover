@@ -156,7 +156,7 @@ class DepthFitter:
         overlap = (old_mask_np > 0) & (new_mask_np > 0)
         # 2. 非重叠区域（new_mask=1 且 old_mask=0）根据深度比较
         non_overlap = (old_mask_np == 0) & (new_mask_np > 0)
-        in_front = (old_depth_np > aligned)
+        in_front = (old_depth_np < aligned)
 
         final_mask_np = np.zeros_like(aligned, dtype=np.float32)
         final_mask_np[overlap] = 1.0

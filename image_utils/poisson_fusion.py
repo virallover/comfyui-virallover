@@ -92,13 +92,18 @@ class PoissonImageFusion:
             # 泊松融合
             blended = cv2.seamlessClone(fg_np, bg_np, mask_np, center, cv2.NORMAL_CLONE)
 
-            # 保证输出为 3 通道
+            print(f"[DEBUG] cv2.seamlessClone raw output shape: {blended.shape}, dtype: {blended.dtype}")
+
+            # 强制转换为 RGB 3通道
             if blended.ndim == 2:
+                print("[WARN] blended 是灰度图，转换为 RGB")
                 blended = cv2.cvtColor(blended, cv2.COLOR_GRAY2RGB)
             elif blended.shape[2] == 1:
+                print("[WARN] blended 只有一个通道，转换为 RGB")
                 blended = cv2.cvtColor(blended, cv2.COLOR_GRAY2RGB)
             elif blended.shape[2] != 3:
-                raise RuntimeError(f"[PoissonImageFusion] cv2.seamlessClone 输出通道数异常: {blended.shape}")
+                raise RuntimeError(f"[ERROR] cv2 返回的图像通道数非法: {blended.shape}")
+
 
             print(f"[DEBUG] mask_np after merge: {mask_np.shape}, dtype: {mask_np.dtype}, min: {mask_np.min()}, max: {mask_np.max()}")
 

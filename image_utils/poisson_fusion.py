@@ -29,14 +29,30 @@ class PoissonImageFusion:
             print(f"[DEBUG] Input bg shape: {bg.shape}")
             print(f"[DEBUG] Input mask shape: {mask.shape}")
 
-            # 检查通道数
-            if fg.shape[0] != 3 or bg.shape[0] != 3:
-                raise ValueError(f"[PoissonImageFusion] 期望 RGB 图像，实际 fg/bg 通道为 {fg.shape[0]}, {bg.shape[0]}")
+            # 兼容 [C, H, W] 或 [H, W, C]
+            if fg.ndim == 3 and fg.shape[0] == 3:
+                fg_np = np.transpose(fg, (1, 2, 0))
+            elif fg.ndim == 3 and fg.shape[2] == 3:
+                fg_np = fg
+            else:
+                raise ValueError(f"[PoissonImageFusion] fg shape不支持: {fg.shape}")
 
-            # 转换为 [H, W, C]
-            fg_np = np.transpose(fg, (1, 2, 0))
-            bg_np = np.transpose(bg, (1, 2, 0))
-            mask_np = mask.squeeze()  # (1, H, W) → (H, W)
+            if bg.ndim == 3 and bg.shape[0] == 3:
+                bg_np = np.transpose(bg, (1, 2, 0))
+            elif bg.ndim == 3 and bg.shape[2] == 3:
+                bg_np = bg
+            else:
+                raise ValueError(f"[PoissonImageFusion] bg shape不支持: {bg.shape}")
+
+            # mask 兼容 [1, H, W]、[H, W, 1]、[H, W]
+            if mask.ndim == 3 and mask.shape[0] == 1:
+                mask_np = mask[0]
+            elif mask.ndim == 3 and mask.shape[2] == 1:
+                mask_np = mask[:, :, 0]
+            elif mask.ndim == 2:
+                mask_np = mask
+            else:
+                raise ValueError(f"[PoissonImageFusion] mask shape不支持: {mask.shape}")
 
             # 归一化
             fg_np = (np.clip(fg_np, 0, 1) * 255).astype(np.uint8)
@@ -46,7 +62,6 @@ class PoissonImageFusion:
             # 检查尺寸一致
             h = min(fg_np.shape[0], bg_np.shape[0], mask_np.shape[0])
             w = min(fg_np.shape[1], bg_np.shape[1], mask_np.shape[1])
-
             fg_np = fg_np[:h, :w, :]
             bg_np = bg_np[:h, :w, :]
             if mask_np.ndim == 2:
@@ -55,6 +70,10 @@ class PoissonImageFusion:
                 mask_np = mask_np[:h, :w, :3]
 
             print(f"[DEBUG] Resized fg/bg/mask to: {fg_np.shape}")
+
+            # shape 检查
+            if fg_np.shape != bg_np.shape or fg_np.shape != mask_np.shape:
+                raise ValueError(f"[PoissonImageFusion] shape mismatch: fg_np {fg_np.shape}, bg_np {bg_np.shape}, mask_np {mask_np.shape}")
 
             # 中心点定位
             ys, xs = np.where(mask_np[:, :, 0] > 10)

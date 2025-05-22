@@ -81,7 +81,7 @@ class DebugShape:
 
 class TensorBatchToImage:
     """
-    将一个 Tensor 批次 [B, C, H, W] 中的某一张图像提取出来，返回单张 Tensor 图像。
+    将一个 Tensor 批次 [B, C, H, W] 中的某一张图像提取出来，返回单张 ComfyUI IMAGE。
     """
     @classmethod
     def INPUT_TYPES(cls):
@@ -92,8 +92,8 @@ class TensorBatchToImage:
             }
         }
 
-    RETURN_TYPES = ("TENSOR",)
-    RETURN_NAMES = ("image_tensor",)
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
 
     FUNCTION = "extract"
 
@@ -107,4 +107,9 @@ class TensorBatchToImage:
         index = min(max(batch_image_number, 0), batch_size - 1)  # Clamp index
 
         single_tensor = images_batch[index].unsqueeze(0)  # 保持 [1, C, H, W] 维度
+        # 自动归一化到 0~1
+        if single_tensor.dtype == torch.uint8:
+            single_tensor = single_tensor.float() / 255.0
+        else:
+            single_tensor = single_tensor.clamp(0, 1)
         return (single_tensor,)

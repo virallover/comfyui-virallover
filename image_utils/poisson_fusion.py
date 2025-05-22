@@ -17,8 +17,8 @@ class PoissonImageFusion:
             }
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("blended_image",)
+    RETURN_TYPES = ("TENSOR",)
+    RETURN_NAMES = ("blended_tensor",)
     FUNCTION = "fuse"
     CATEGORY = "custom"
 
@@ -82,3 +82,33 @@ class DebugShape:
         if hasattr(image, 'shape') and (image.shape[1] != 3 or image.ndim != 4):
             print(f"[ERROR] DebugShape: 非 RGB 4D 图像，实际 shape: {image.shape}")
         return (image,)
+
+class TensorBatchToImage:
+    """
+    将一个 Tensor 批次 [B, C, H, W] 中的某一张图像提取出来，返回单张 Tensor 图像。
+    """
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images_batch": ("TENSOR",),
+                "batch_image_number": ("INT", {"default": 0, "min": 0, "max": 9999})
+            }
+        }
+
+    RETURN_TYPES = ("TENSOR",)
+    RETURN_NAMES = ("image_tensor",)
+
+    FUNCTION = "extract"
+
+    CATEGORY = "Custom/Tensor"
+
+    def extract(self, images_batch: torch.Tensor, batch_image_number: int):
+        if not isinstance(images_batch, torch.Tensor):
+            raise TypeError("images_batch must be a torch.Tensor")
+
+        batch_size = images_batch.shape[0]
+        index = min(max(batch_image_number, 0), batch_size - 1)  # Clamp index
+
+        single_tensor = images_batch[index].unsqueeze(0)  # 保持 [1, C, H, W] 维度
+        return (single_tensor,)

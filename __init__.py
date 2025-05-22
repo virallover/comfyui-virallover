@@ -1,6 +1,6 @@
 from .lora_downloader import DownloadAndLoadLoraModelOnly
 from .image_utils.depth_fitter import DepthFitter
-from .image_utils.poisson_fusion import PoissonImageFusion, DebugShape
+from .image_utils.poisson_fusion import PoissonImageFusion, DebugShape, TensorBatchToImage
 
 
 # 注册到NODE_CLASS_MAPPINGS
@@ -17,6 +17,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DepthFitter": "Depth Fitter",
     "PoissonImageFusion": "Poisson Image Fusion",
     "DebugShape": "Debug Shape",
+    "TensorBatchToImage": "Tensor Batch to Image",
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']

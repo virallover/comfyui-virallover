@@ -100,6 +100,7 @@ class PoissonImageFusion:
             if blended_tensor.shape[1] != 3:
                 raise RuntimeError(f"[PoissonImageFusion] 输出必须是 RGB 图像，但得到 {blended_tensor.shape}")
 
+            print(f"[DEBUG] PoissonImageFusion output shape: {blended_tensor.shape}")
             return (blended_tensor,)
 
         except Exception as e:

@@ -10,6 +10,7 @@ NODE_CLASS_MAPPINGS = {
     "DepthFitter": DepthFitter,
     "PoissonImageFusion": PoissonImageFusion,
     "DebugShape": DebugShape,
+    "TensorBatchToImage": TensorBatchToImage,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {

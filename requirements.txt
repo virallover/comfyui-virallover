@@ -1,3 +1,4 @@
 requests
 scikit-image
 scipy
+opencv-python

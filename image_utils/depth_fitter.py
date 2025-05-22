@@ -53,16 +53,51 @@ class DepthFitter:
         return arr
 
     @staticmethod
-    def tps_depth_warp(old_depth, old_mask, new_mask):
+    def uniform_sample_coords(coords, values, max_points, grid_size=32):
+        """
+        在图像空间内均匀采样点。
+        coords: (N, 2) array of [y, x] positions
+        values: (N,) array of depth values
+        """
+        h, w = coords[:, 0].max() + 1, coords[:, 1].max() + 1
+        sampled_idx = []
+
+        grid_h = h // grid_size + 1
+        grid_w = w // grid_size + 1
+
+        for i in range(grid_h):
+            for j in range(grid_w):
+                mask = (
+                    (coords[:, 0] >= i * grid_size) & (coords[:, 0] < (i + 1) * grid_size) &
+                    (coords[:, 1] >= j * grid_size) & (coords[:, 1] < (j + 1) * grid_size)
+                )
+                cell_indices = np.where(mask)[0]
+                if len(cell_indices) > 0:
+                    chosen = np.random.choice(cell_indices, size=1)
+                    sampled_idx.append(chosen)
+
+        sampled_idx = np.concatenate(sampled_idx)
+        if sampled_idx.size > max_points:
+            sampled_idx = np.random.choice(sampled_idx, size=max_points, replace=False)
+
+        return coords[sampled_idx], values[sampled_idx]
+
+    @staticmethod
+    def tps_depth_warp(old_depth, old_mask, new_mask, max_points=1000):
         """
         使用TPS（Thin Plate Spline）将 old_mask 区域的深度结构挤压映射到 new_mask 区域。
         返回一张深度图，仅在 new_mask 区域有效，其余为0。
+        max_points: 用于拟合的最大采样点数，防止内存爆炸
         """
         # 1. 提取 old_mask 区域坐标和值
         old_coords = np.argwhere(old_mask > 0)
         if old_coords.shape[0] < 3:
-            return np.zeros_like(old_depth)  # 不足以做拟合
+            return np.zeros_like(old_depth)
         old_z = old_depth[old_mask > 0]
+
+        # 均匀降采样
+        if old_coords.shape[0] > max_points:
+            old_coords, old_z = DepthFitter.uniform_sample_coords(old_coords, old_z, max_points)
 
         # 2. 提取 new_mask 区域坐标
         new_coords = np.argwhere(new_mask > 0)

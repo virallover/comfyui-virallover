@@ -91,21 +91,24 @@ class BrightnessCorrectionNode:
         target_image = self._ensure_chw(target_image)
         original_mask = self._ensure_mask_single_channel(original_mask)
         target_mask = self._ensure_mask_single_channel(target_mask)
-        ori = tensor2pil(original_image)
-        tgt = tensor2pil(target_image)
-        ori_np = np.array(ori)
-        tgt_np = np.array(tgt)
+        
+        # 转为 OpenCV 兼容格式 [H, W, 3] uint8
+        ori_np = (original_image[0].cpu().numpy() * 255).astype(np.uint8)
+        if ori_np.shape[0] == 3:
+            ori_np = ori_np.transpose(1, 2, 0)  # [3, H, W] -> [H, W, 3]
+        tgt_np = (target_image[0].cpu().numpy() * 255).astype(np.uint8)
+        if tgt_np.shape[0] == 3:
+            tgt_np = tgt_np.transpose(1, 2, 0)
 
-        # 单通道二值 mask
+        # 单通道二值 mask [H, W]
         ori_mask_np = self._to_single_mask(original_mask)
         tgt_mask_np = self._to_single_mask(target_mask)
 
-        # 原图亮度
+        # OpenCV 灰度
         ori_gray = cv2.cvtColor(ori_np, cv2.COLOR_RGB2GRAY)
         ori_pixels = ori_gray[ori_mask_np == 1]
         mean_ori_brightness = np.mean(ori_pixels) if ori_pixels.size > 0 else 128
 
-        # 目标图亮度
         tgt_gray = cv2.cvtColor(tgt_np, cv2.COLOR_RGB2GRAY)
         tgt_pixels = tgt_gray[tgt_mask_np == 1]
         mean_tgt_brightness = np.mean(tgt_pixels) if tgt_pixels.size > 0 else 1
@@ -113,7 +116,7 @@ class BrightnessCorrectionNode:
         # 补偿因子
         brightness_factor = mean_ori_brightness / mean_tgt_brightness
 
-        # 亮度调整
+        # 亮度调整（OpenCV格式）
         tgt_float = tgt_np.astype(np.float32)
         corrected = tgt_float.copy()
         for c in range(3):
@@ -121,5 +124,8 @@ class BrightnessCorrectionNode:
             channel[tgt_mask_np == 1] = np.clip(channel[tgt_mask_np == 1] * brightness_factor, 0, 255)
             corrected[:, :, c] = channel
 
-        corrected_img = Image.fromarray(corrected.astype(np.uint8))
-        return (pil2tensor(corrected_img),)
+        # 转回 ComfyUI IMAGE 格式 [1, 3, H, W] float32 0~1
+        corrected = corrected.astype(np.uint8)
+        corrected = corrected.transpose(2, 0, 1)  # [H, W, 3] -> [3, H, W]
+        corrected = torch.from_numpy(corrected).unsqueeze(0).float() / 255.0  # [1, 3, H, W]
+        return (corrected,)

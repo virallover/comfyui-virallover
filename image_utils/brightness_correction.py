@@ -12,9 +12,19 @@ def pil2tensor(img):
 
 def tensor2pil(tensor):
     arr = tensor[0].cpu().numpy()
+    if arr.ndim == 2:  # 灰度图
+        arr = np.stack([arr]*3, axis=-1)
+    elif arr.ndim == 3:
+        if arr.shape[0] == 1:  # 单通道，转3通道
+            arr = np.concatenate([arr]*3, axis=0)
+        if arr.shape[0] == 3:  # [C, H, W]
+            arr = arr.transpose(1, 2, 0)
+        else:
+            raise ValueError(f"tensor2pil: 不支持的shape: {arr.shape}")
+    else:
+        raise ValueError(f"tensor2pil: 不支持的shape: {arr.shape}")
     arr = np.clip(arr, 0, 1)
     arr = (arr * 255).astype(np.uint8)
-    arr = arr.transpose(1, 2, 0)  # CHW -> HWC
     return Image.fromarray(arr)
 
 class BrightnessCorrectionNode:
@@ -48,6 +58,10 @@ class BrightnessCorrectionNode:
             raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
 
     def adjust_brightness(self, original_image, original_mask, target_image, target_mask):
+        print("original_image shape:", original_image.shape)
+        print("target_image shape:", target_image.shape)
+        print("original_mask shape:", original_mask.shape)
+        print("target_mask shape:", target_mask.shape)
         # PIL
         ori = tensor2pil(original_image)
         tgt = tensor2pil(target_image)

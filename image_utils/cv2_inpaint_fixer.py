@@ -26,8 +26,16 @@ class CV2InpaintEdgeFixer:
 
     def to_uint8(self, img):
         """
-        Convert ComfyUI image (float32 0-1) or already uint8 image to proper uint8 BGR.
+        支持 ComfyUI tensor 或 numpy array，统一转为 uint8 numpy。
         """
+        if isinstance(img, torch.Tensor):
+            img = img.cpu().numpy()
+            # 如果是 [1, 3, H, W] 或 [1, H, W]，去掉 batch 维
+            if img.shape[0] == 1:
+                img = img[0]
+            # 如果是 [3, H, W]，转为 [H, W, 3]
+            if img.ndim == 3 and img.shape[0] == 3:
+                img = np.transpose(img, (1, 2, 0))
         if img.dtype == np.float32 and img.max() <= 1.0:
             img = (img * 255).clip(0, 255).astype(np.uint8)
         elif img.dtype != np.uint8:
@@ -45,7 +53,6 @@ class CV2InpaintEdgeFixer:
             mask_gray = mask_uint8
 
         result = cv2.inpaint(img_bgr, mask_gray, radius, flags)
-
         # convert back to float32 0-1 for ComfyUI output
         result = result.astype(np.float32) / 255.0
         return (result,)

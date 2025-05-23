@@ -67,15 +67,19 @@ class BrightnessCorrectionNode:
     @staticmethod
     def _to_single_mask(mask_tensor):
         mask_np = mask_tensor.cpu().numpy()
-        if mask_np.ndim == 3:
-            if mask_np.shape[0] == 1:
-                return (mask_np[0] > 0.5).astype(np.uint8)
-            else:
-                return (np.any(mask_np > 0.5, axis=0)).astype(np.uint8)
-        elif mask_np.ndim == 2:
+        # 处理 [1, 1, H, W]
+        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[1] == 1:
+            return (mask_np[0, 0] > 0.5).astype(np.uint8)
+        # 处理 [1, H, W]
+        if mask_np.ndim == 3 and mask_np.shape[0] == 1:
+            return (mask_np[0] > 0.5).astype(np.uint8)
+        # 处理 [H, W]
+        if mask_np.ndim == 2:
             return (mask_np > 0.5).astype(np.uint8)
-        else:
-            raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
+        # 处理 [C, H, W]
+        if mask_np.ndim == 3:
+            return (np.any(mask_np > 0.5, axis=0)).astype(np.uint8)
+        raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
 
     def adjust_brightness(self, original_image, original_mask, target_image, target_mask):
         print("original_image shape:", original_image.shape)

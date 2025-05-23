@@ -22,19 +22,21 @@ class DepthFitter:
     CATEGORY = "custom"
 
     @staticmethod
-    def _to_single_mask(mask):
-        mask_np = mask.cpu().numpy()
-        # 处理 [C, H, W]，C=1 或 C=3
+    def _to_single_mask(mask_tensor):
+        mask_np = mask_tensor.cpu().numpy()
+        # 处理 [1, 1, H, W]
+        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[1] == 1:
+            return (mask_np[0, 0] > 0.5).astype(np.uint8)
+        # 处理 [1, H, W]
+        if mask_np.ndim == 3 and mask_np.shape[0] == 1:
+            return (mask_np[0] > 0.5).astype(np.uint8)
+        # 处理 [H, W]
+        if mask_np.ndim == 2:
+            return (mask_np > 0.5).astype(np.uint8)
+        # 处理 [C, H, W]
         if mask_np.ndim == 3:
-            if mask_np.shape[0] == 1:
-                mask_np = mask_np[0]
-            else:
-                mask_np = np.any(mask_np > 0, axis=0).astype(np.uint8)
-        elif mask_np.ndim == 2:
-            pass
-        else:
-            raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
-        return mask_np
+            return (np.any(mask_np > 0.5, axis=0)).astype(np.uint8)
+        raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
 
     @staticmethod
     def _extract_gray(depth):

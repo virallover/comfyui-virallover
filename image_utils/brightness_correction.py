@@ -1,8 +1,21 @@
 import numpy as np
 import cv2
 from PIL import Image
-from comfy.utils import pil_to_tensor
-from comfy.utils.common_annotated import tensor2pil
+import torch
+
+def pil2tensor(img):
+    arr = np.array(img).astype(np.float32) / 255.0
+    if arr.ndim == 2:
+        arr = arr[:, :, None]
+    arr = arr.transpose(2, 0, 1)  # HWC -> CHW
+    return torch.from_numpy(arr).unsqueeze(0)
+
+def tensor2pil(tensor):
+    arr = tensor[0].cpu().numpy()
+    arr = np.clip(arr, 0, 1)
+    arr = (arr * 255).astype(np.uint8)
+    arr = arr.transpose(1, 2, 0)  # CHW -> HWC
+    return Image.fromarray(arr)
 
 class BrightnessCorrectionNode:
     @classmethod
@@ -67,4 +80,4 @@ class BrightnessCorrectionNode:
             corrected[:, :, c] = channel
 
         corrected_img = Image.fromarray(corrected.astype(np.uint8))
-        return (pil_to_tensor(corrected_img),)
+        return (pil2tensor(corrected_img),)

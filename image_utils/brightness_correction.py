@@ -1,6 +1,17 @@
 import numpy as np
 import torch
 
+def tensor_to_image(t):
+    if isinstance(t, torch.Tensor):
+        if t.ndim == 4 and t.shape[0] == 1:  # (1, C, H, W)
+            t = t.squeeze(0).permute(1, 2, 0)  # → (H, W, C)
+        elif t.ndim == 3 and t.shape[0] in [1, 3]:
+            t = t.permute(1, 2, 0)  # → (H, W, C)
+        img = t.detach().cpu().numpy()
+        img = (img * 255).clip(0, 255).astype(np.uint8)
+        return img
+    return t
+
 class BrightnessCorrectionNode:
     @staticmethod
     def _ensure_chw(tensor):
@@ -106,4 +117,4 @@ class BrightnessCorrectionNode:
         print("corrected shape:", corrected.shape)
         print("corrected dtype:", corrected.dtype)
 
-        return (corrected,)
+        return (tensor_to_image(corrected),)

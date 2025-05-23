@@ -20,11 +20,34 @@ class CV2InpaintEdgeFixer:
     CATEGORY = "inpainting"
 
     def run(self, image, edge_mask, inpaintRadius, method):
-        img = image[0].cpu().numpy().transpose(1, 2, 0)  # [H, W, 3]
-        mask = (edge_mask[0, 0].cpu().numpy() > 0.5).astype(np.uint8) * 255  # [H, W]
+        # 兼容 tensor 和 nparray
+        if isinstance(image, torch.Tensor):
+            img = image[0].cpu().numpy().transpose(1, 2, 0)
+        elif isinstance(image, np.ndarray):
+            if image.ndim == 4 and image.shape[1] == 3:
+                img = np.transpose(image[0], (1, 2, 0))
+            elif image.ndim == 3:
+                img = image
+            else:
+                raise ValueError(f"image shape不支持: {image.shape}")
+        else:
+            raise TypeError(f"image类型不支持: {type(image)}")
 
-        # Convert to uint8 for OpenCV
-        img8 = (img * 255).astype(np.uint8)
+        if isinstance(edge_mask, torch.Tensor):
+            mask = (edge_mask[0, 0].cpu().numpy() > 0.5).astype(np.uint8) * 255
+        elif isinstance(edge_mask, np.ndarray):
+            if edge_mask.ndim == 4:
+                mask = (edge_mask[0, 0] > 0.5).astype(np.uint8) * 255
+            elif edge_mask.ndim == 3:
+                mask = (edge_mask[0] > 0.5).astype(np.uint8) * 255
+            elif edge_mask.ndim == 2:
+                mask = (edge_mask > 0.5).astype(np.uint8) * 255
+            else:
+                raise ValueError(f"edge_mask shape不支持: {edge_mask.shape}")
+        else:
+            raise TypeError(f"edge_mask类型不支持: {type(edge_mask)}")
+
+        img8 = (img * 255).astype(np.uint8) if img.dtype != np.uint8 else img
 
         # Select method
         if method == "telea":

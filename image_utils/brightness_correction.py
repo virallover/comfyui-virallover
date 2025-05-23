@@ -12,20 +12,39 @@ def pil2tensor(img):
 
 def tensor2pil(tensor):
     arr = tensor[0].cpu().numpy()
-    if arr.ndim == 2:  # 灰度图
-        arr = np.stack([arr]*3, axis=-1)
-    elif arr.ndim == 3:
-        if arr.shape[0] == 1:  # 单通道，转3通道
-            arr = np.concatenate([arr]*3, axis=0)
-        if arr.shape[0] == 3:  # [C, H, W]
+    if arr.ndim == 3:
+        if arr.shape[0] == 3:  # [3, H, W]
             arr = arr.transpose(1, 2, 0)
+        elif arr.shape[2] == 3:  # [H, W, 3]
+            pass
         else:
             raise ValueError(f"tensor2pil: 不支持的shape: {arr.shape}")
+    elif arr.ndim == 2:
+        arr = np.stack([arr]*3, axis=-1)
     else:
         raise ValueError(f"tensor2pil: 不支持的shape: {arr.shape}")
     arr = np.clip(arr, 0, 1)
     arr = (arr * 255).astype(np.uint8)
     return Image.fromarray(arr)
+
+def _ensure_chw(tensor):
+    # tensor: [1, H, W, 3] or [1, 3, H, W]
+    arr = tensor.cpu().numpy()
+    if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
+        arr = arr.transpose(0, 3, 1, 2)  # -> [1, 3, H, W]
+        return torch.from_numpy(arr).to(tensor.device)
+    return tensor
+
+def _ensure_mask_single_channel(tensor):
+    arr = tensor.cpu().numpy()
+    if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
+        arr = arr[..., 0]  # 只取第一个通道
+        arr = arr[:, None, :, :]  # [1, 1, H, W]
+        return torch.from_numpy(arr).to(tensor.device)
+    elif arr.ndim == 4 and arr.shape[1] == 3:  # [1, 3, H, W]
+        arr = arr[:, 0:1, :, :]  # 只取第一个通道
+        return torch.from_numpy(arr).to(tensor.device)
+    return tensor
 
 class BrightnessCorrectionNode:
     @classmethod
@@ -63,6 +82,10 @@ class BrightnessCorrectionNode:
         print("original_mask shape:", original_mask.shape)
         print("target_mask shape:", target_mask.shape)
         # PIL
+        original_image = self._ensure_chw(original_image)
+        target_image = self._ensure_chw(target_image)
+        original_mask = self._ensure_mask_single_channel(original_mask)
+        target_mask = self._ensure_mask_single_channel(target_mask)
         ori = tensor2pil(original_image)
         tgt = tensor2pil(target_image)
         ori_np = np.array(ori)

@@ -27,26 +27,27 @@ def tensor2pil(tensor):
     arr = (arr * 255).astype(np.uint8)
     return Image.fromarray(arr)
 
-def _ensure_chw(tensor):
-    # tensor: [1, H, W, 3] or [1, 3, H, W]
-    arr = tensor.cpu().numpy()
-    if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
-        arr = arr.transpose(0, 3, 1, 2)  # -> [1, 3, H, W]
-        return torch.from_numpy(arr).to(tensor.device)
-    return tensor
-
-def _ensure_mask_single_channel(tensor):
-    arr = tensor.cpu().numpy()
-    if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
-        arr = arr[..., 0]  # 只取第一个通道
-        arr = arr[:, None, :, :]  # [1, 1, H, W]
-        return torch.from_numpy(arr).to(tensor.device)
-    elif arr.ndim == 4 and arr.shape[1] == 3:  # [1, 3, H, W]
-        arr = arr[:, 0:1, :, :]  # 只取第一个通道
-        return torch.from_numpy(arr).to(tensor.device)
-    return tensor
-
 class BrightnessCorrectionNode:
+    @staticmethod
+    def _ensure_chw(tensor):
+        arr = tensor.cpu().numpy()
+        if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
+            arr = arr.transpose(0, 3, 1, 2)  # -> [1, 3, H, W]
+            return torch.from_numpy(arr).to(tensor.device)
+        return tensor
+
+    @staticmethod
+    def _ensure_mask_single_channel(tensor):
+        arr = tensor.cpu().numpy()
+        if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
+            arr = arr[..., 0]  # 只取第一个通道
+            arr = arr[:, None, :, :]  # [1, 1, H, W]
+            return torch.from_numpy(arr).to(tensor.device)
+        elif arr.ndim == 4 and arr.shape[1] == 3:  # [1, 3, H, W]
+            arr = arr[:, 0:1, :, :]  # 只取第一个通道
+            return torch.from_numpy(arr).to(tensor.device)
+        return tensor
+
     @classmethod
     def INPUT_TYPES(cls):
         return {

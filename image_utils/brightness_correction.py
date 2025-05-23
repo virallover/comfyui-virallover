@@ -102,6 +102,8 @@ class BrightnessCorrectionNode:
                 mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
             if mask_tensor.shape[1] == 1 and corrected.shape[1] == 3:
                 mask_tensor = mask_tensor.repeat(1, 3, 1, 1)  # [1, 3, H, W]
+            elif mask_tensor.shape[1] != corrected.shape[1]:
+                mask_tensor = mask_tensor.expand(-1, corrected.shape[1], -1, -1)
             corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
 
         # 输出标准化处理：RGB、float32、[0, 1]、[1, 3, H, W]

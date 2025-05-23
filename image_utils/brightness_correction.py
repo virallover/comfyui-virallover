@@ -44,6 +44,10 @@ class BrightnessCorrectionNode:
     CATEGORY = "Image Processing"
 
     def adjust_brightness(self, original_image, original_mask, target_image, target_mask):
+        print(f"[调试] original_image shape: {getattr(original_image, 'shape', None)}, dtype: {getattr(original_image, 'dtype', None)}")
+        print(f"[调试] original_mask shape: {getattr(original_mask, 'shape', None)}, dtype: {getattr(original_mask, 'dtype', None)}")
+        print(f"[调试] target_image shape: {getattr(target_image, 'shape', None)}, dtype: {getattr(target_image, 'dtype', None)}")
+        print(f"[调试] target_mask shape: {getattr(target_mask, 'shape', None)}, dtype: {getattr(target_mask, 'dtype', None)}")
         ori_img = original_image.clone()
         tgt_img = target_image.clone()
         ori_mask = self._to_single_mask(original_mask)
@@ -51,6 +55,12 @@ class BrightnessCorrectionNode:
 
         ori_gray = self.rgb_to_grayscale_torch(ori_img).cpu().numpy().squeeze()
         tgt_gray = self.rgb_to_grayscale_torch(tgt_img).cpu().numpy().squeeze()
+
+        # shape 检查
+        if ori_gray.shape != ori_mask.shape:
+            raise ValueError(f"original_image灰度图与original_mask尺寸不一致: ori_gray shape={ori_gray.shape}, ori_mask shape={ori_mask.shape}")
+        if tgt_gray.shape != tgt_mask.shape:
+            raise ValueError(f"target_image灰度图与target_mask尺寸不一致: tgt_gray shape={tgt_gray.shape}, tgt_mask shape={tgt_mask.shape}")
 
         ori_pixels = ori_gray[ori_mask]
         tgt_pixels = tgt_gray[tgt_mask]

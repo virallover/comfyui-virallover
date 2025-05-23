@@ -88,4 +88,5 @@ class BrightnessCorrectionNode:
         # 输出标准化处理：RGB、float32、[0, 1]、[1, 3, H, W]
         if corrected.shape[1] == 1:
             corrected = corrected.repeat(1, 3, 1, 1)
-        corrected = corrected.to
+        corrected = corrected.clamp(0, 1).to(torch.float32)
+        return (corrected,)

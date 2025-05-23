@@ -13,6 +13,8 @@ class BrightnessCorrectionNode:
             return (mask_np > 0.5)
         if mask_np.ndim == 3:
             return (np.any(mask_np > 0.5, axis=0))
+        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[-1] == 3:
+            return (mask_np[0, ..., 0] > 0.5)
         raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
 
     @staticmethod

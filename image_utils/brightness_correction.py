@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-from torchvision.transforms.functional import rgb_to_grayscale
 
 class BrightnessCorrectionNode:
     @classmethod
@@ -28,8 +27,11 @@ class BrightnessCorrectionNode:
         tgt_mask = (target_mask > 0.5).float()
 
         # 转灰度图
-        ori_gray = rgb_to_grayscale(ori_img)
-        tgt_gray = rgb_to_grayscale(tgt_img)
+        def rgb_to_grayscale_torch(img):
+            return 0.299 * img[:, 0:1, :, :] + 0.587 * img[:, 1:2, :, :] + 0.114 * img[:, 2:3, :, :]
+
+        ori_gray = rgb_to_grayscale_torch(ori_img)
+        tgt_gray = rgb_to_grayscale_torch(tgt_img)
 
         # 提取被 mask 遮盖的区域像素亮度
         ori_pixels = ori_gray[ori_mask.bool()]

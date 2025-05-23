@@ -2,4 +2,3 @@ requests
 scikit-image
 scipy
 opencv-python
-torchvision>=0.13.0

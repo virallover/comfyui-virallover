@@ -1,30 +1,5 @@
 import numpy as np
 import torch
-from PIL import Image
-
-def pil2tensor(img):
-    arr = np.array(img).astype(np.float32) / 255.0
-    if arr.ndim == 2:
-        arr = arr[:, :, None]
-    arr = arr.transpose(2, 0, 1)  # HWC -> CHW
-    return torch.from_numpy(arr).unsqueeze(0)
-
-def tensor2pil(tensor):
-    arr = tensor[0].cpu().numpy()
-    if arr.ndim == 3:
-        if arr.shape[0] == 3:  # [3, H, W]
-            arr = arr.transpose(1, 2, 0)
-        elif arr.shape[2] == 3:  # [H, W, 3]
-            pass
-        else:
-            raise ValueError(f"tensor2pil: 不支持的shape: {arr.shape}")
-    elif arr.ndim == 2:
-        arr = np.stack([arr]*3, axis=-1)
-    else:
-        raise ValueError(f"tensor2pil: 不支持的shape: {arr.shape}")
-    arr = np.clip(arr, 0, 1)
-    arr = (arr * 255).astype(np.uint8)
-    return Image.fromarray(arr)
 
 class BrightnessCorrectionNode:
     @staticmethod
@@ -109,6 +84,14 @@ class BrightnessCorrectionNode:
             channel = corrected[c]
             channel[tgt_mask == 1] = np.clip(channel[tgt_mask == 1] * factor, 0, 1)
             corrected[c] = channel
+        # 原 corrected 应该是 [3, H, W] float32
+        corrected = torch.from_numpy(corrected).unsqueeze(0).float()  # → [1, 3, H, W]
+        if corrected.shape[1] != 3:
+            raise ValueError(f"Output must be RGB with 3 channels, but got shape {corrected.shape}")
 
-        corrected = torch.from_numpy(corrected).unsqueeze(0).float()
+        # 强制校验并修正
+        if corrected.ndim == 3:  # [3,H,W]
+            corrected = corrected.unsqueeze(0)
+        if corrected.ndim == 4 and corrected.shape[1] == 1:
+            corrected = corrected.repeat(1, 3, 1, 1)  # 升成 RGB 通道
         return (corrected,)

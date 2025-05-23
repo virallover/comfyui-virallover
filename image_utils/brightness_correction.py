@@ -99,4 +99,11 @@ class BrightnessCorrectionNode:
             corrected = corrected.unsqueeze(0)
         if corrected.ndim == 4 and corrected.shape[1] == 1:
             corrected = corrected.repeat(1, 3, 1, 1)  # 升成 RGB 通道
+
+        # 强制剪裁值域并确保 dtype
+        corrected = corrected.clamp(0, 1)
+        
+        print("corrected shape:", corrected.shape)
+        print("corrected dtype:", corrected.dtype)
+
         return (corrected,)

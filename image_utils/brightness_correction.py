@@ -56,13 +56,14 @@ class BrightnessCorrectionNode:
         raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
 
     def adjust_brightness(self, original_image, original_mask, target_image, target_mask):
-        # 强制输入 shape 检查
+        # 先自动适配
+        original_image = self._ensure_chw(original_image)
+        target_image = self._ensure_chw(target_image)
+        # 再做 shape 检查
         for name, img in [("original_image", original_image), ("target_image", target_image)]:
             if img.ndim != 4 or img.shape[1] != 3:
                 raise ValueError(f"{name} 必须是 [1, 3, H, W]，但收到 {img.shape}")
         # 保证输入都是 [1, 3, H, W] float32
-        original_image = self._ensure_chw(original_image)
-        target_image = self._ensure_chw(target_image)
         original_mask = self._ensure_mask_single_channel(original_mask)
         target_mask = self._ensure_mask_single_channel(target_mask)
 

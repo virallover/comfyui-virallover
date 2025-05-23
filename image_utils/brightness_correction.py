@@ -100,10 +100,13 @@ class BrightnessCorrectionNode:
             mask_tensor = torch.from_numpy(tgt_mask.astype(np.float32)).to(tgt_img.device)
             if mask_tensor.ndim == 2:
                 mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+            if mask_tensor.shape[1] == 1 and corrected.shape[1] == 3:
+                mask_tensor = mask_tensor.repeat(1, 3, 1, 1)  # [1, 3, H, W]
             corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
 
         # 输出标准化处理：RGB、float32、[0, 1]、[1, 3, H, W]
         if corrected.shape[1] == 1:
             corrected = corrected.repeat(1, 3, 1, 1)
         corrected = corrected.clamp(0, 1).to(torch.float32)
+        assert corrected.shape[1] == 3, f"corrected shape error: {corrected.shape}"
         return (corrected,)

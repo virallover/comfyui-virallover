@@ -7,56 +7,33 @@ class CV2InpaintEdgeFixer:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),          # 输入图像 [1, 3, H, W]
-                "edge_mask": ("MASK",),       # 修复区域 mask [1, 1, H, W]
+                "image": ("IMAGE",),           # ComfyUI 图像 [1, 3, H, W]
+                "edge_mask": ("MASK",),        # 修复区域 [1, 1, H, W]
                 "inpaintRadius": ("FLOAT", {"default": 3.0, "min": 0.1, "max": 50.0}),
-                "method": (["telea", "ns"],),  # 选择算法
+                "method": (["telea", "ns"],),
             }
         }
 
-    RETURN_TYPES = ("NPARRAY",)
-    RETURN_NAMES = ("fixed_nparray",)
+    RETURN_TYPES = ("IMAGE", "NPARRAY")
+    RETURN_NAMES = ("fixed_image", "fixed_np_array")
     FUNCTION = "run"
     CATEGORY = "inpainting"
 
     def run(self, image, edge_mask, inpaintRadius, method):
-        # 兼容 tensor 和 nparray
-        if isinstance(image, torch.Tensor):
-            img = image[0].cpu().numpy().transpose(1, 2, 0)
-        elif isinstance(image, np.ndarray):
-            if image.ndim == 4 and image.shape[1] == 3:
-                img = np.transpose(image[0], (1, 2, 0))
-            elif image.ndim == 3:
-                img = image
-            else:
-                raise ValueError(f"image shape不支持: {image.shape}")
-        else:
-            raise TypeError(f"image类型不支持: {type(image)}")
+        img_tensor = image[0]  # shape: [3, H, W]
+        mask_tensor = edge_mask[0, 0]  # shape: [H, W]
 
-        if isinstance(edge_mask, torch.Tensor):
-            mask = (edge_mask[0, 0].cpu().numpy() > 0.5).astype(np.uint8) * 255
-        elif isinstance(edge_mask, np.ndarray):
-            if edge_mask.ndim == 4:
-                mask = (edge_mask[0, 0] > 0.5).astype(np.uint8) * 255
-            elif edge_mask.ndim == 3:
-                mask = (edge_mask[0] > 0.5).astype(np.uint8) * 255
-            elif edge_mask.ndim == 2:
-                mask = (edge_mask > 0.5).astype(np.uint8) * 255
-            else:
-                raise ValueError(f"edge_mask shape不支持: {edge_mask.shape}")
-        else:
-            raise TypeError(f"edge_mask类型不支持: {type(edge_mask)}")
+        img_np = img_tensor.cpu().numpy().transpose(1, 2, 0)  # [H, W, 3]
+        mask_np = (mask_tensor.cpu().numpy() > 0.5).astype(np.uint8) * 255  # [H, W]
 
-        img8 = (img * 255).astype(np.uint8) if img.dtype != np.uint8 else img
+        # Convert to uint8 and BGR
+        img_bgr = (img_np * 255).astype(np.uint8)[..., ::-1]  # RGB → BGR
 
-        # Select method
-        if method == "telea":
-            flags = cv2.INPAINT_TELEA
-        else:
-            flags = cv2.INPAINT_NS
+        flags = cv2.INPAINT_TELEA if method == "telea" else cv2.INPAINT_NS
+        inpainted_bgr = cv2.inpaint(img_bgr, mask_np, inpaintRadius, flags=flags)  # BGR uint8
 
-        # Inpaint
-        inpainted = cv2.inpaint(img8, mask, inpaintRadius, flags=flags)
+        # Convert back to RGB float32 for IMAGE
+        inpainted_rgb = inpainted_bgr[..., ::-1].astype(np.float32) / 255.0  # BGR → RGB
+        img_tensor_out = torch.from_numpy(inpainted_rgb.transpose(2, 0, 1)).unsqueeze(0).to(dtype=img_tensor.dtype)
 
-        # 直接返回 nparray 格式 [H, W, 3]，uint8
-        return (inpainted,)
+        return (img_tensor_out, inpainted_bgr)  # 第二个输出为 BGR np.uint8

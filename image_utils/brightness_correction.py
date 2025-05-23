@@ -1,7 +1,8 @@
 import numpy as np
 import cv2
 from PIL import Image
-from comfy.utils import pil2tensor, tensor2pil
+from comfy.utils import pil_to_tensor
+from comfy.utils.common_annotated import tensor2pil
 
 class BrightnessCorrectionNode:
     @classmethod
@@ -66,4 +67,4 @@ class BrightnessCorrectionNode:
             corrected[:, :, c] = channel
 
         corrected_img = Image.fromarray(corrected.astype(np.uint8))
-        return (pil2tensor(corrected_img),)
+        return (pil_to_tensor(corrected_img),)

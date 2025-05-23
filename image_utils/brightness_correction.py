@@ -7,6 +7,8 @@ class BrightnessCorrectionNode:
         mask_np = mask_tensor.cpu().numpy()
         if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[1] == 1:
             return (mask_np[0, 0] > 0.5)
+        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[1] == 3:
+            return (mask_np[0, 0] > 0.5)
         if mask_np.ndim == 3 and mask_np.shape[0] == 1:
             return (mask_np[0] > 0.5)
         if mask_np.ndim == 2:

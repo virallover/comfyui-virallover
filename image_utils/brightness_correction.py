@@ -27,6 +27,14 @@ class BrightnessCorrectionNode:
         else:
             raise ValueError(f"Unsupported image shape: {img.shape}")
 
+    @staticmethod
+    def _ensure_chw(tensor):
+        arr = tensor.cpu().numpy()
+        if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
+            arr = arr.transpose(0, 3, 1, 2)  # -> [1, 3, H, W]
+            return torch.from_numpy(arr).to(tensor.device)
+        return tensor
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -48,10 +56,13 @@ class BrightnessCorrectionNode:
         print(f"[调试] original_mask shape: {getattr(original_mask, 'shape', None)}, dtype: {getattr(original_mask, 'dtype', None)}")
         print(f"[调试] target_image shape: {getattr(target_image, 'shape', None)}, dtype: {getattr(target_image, 'dtype', None)}")
         print(f"[调试] target_mask shape: {getattr(target_mask, 'shape', None)}, dtype: {getattr(target_mask, 'dtype', None)}")
-        ori_img = original_image.clone()
-        tgt_img = target_image.clone()
-        ori_mask = self._to_single_mask(original_mask)
-        tgt_mask = self._to_single_mask(target_mask)
+        ori_img = self._ensure_chw(original_image.clone())
+        tgt_img = self._ensure_chw(target_image.clone())
+        ori_mask_img = self._ensure_chw(original_mask.clone())
+        tgt_mask_img = self._ensure_chw(target_mask.clone())
+
+        ori_mask = self._to_single_mask(ori_mask_img)
+        tgt_mask = self._to_single_mask(tgt_mask_img)
 
         ori_gray = self.rgb_to_grayscale_torch(ori_img).cpu().numpy().squeeze()
         tgt_gray = self.rgb_to_grayscale_torch(tgt_img).cpu().numpy().squeeze()

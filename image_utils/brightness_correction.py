@@ -5,19 +5,15 @@ class BrightnessCorrectionNode:
     @staticmethod
     def _to_single_mask(mask_tensor):
         mask_np = mask_tensor.cpu().numpy()
-        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[1] == 1:
-            return (mask_np[0, 0] > 0.5)
-        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[1] == 3:
-            return (mask_np[0, 0] > 0.5)
-        if mask_np.ndim == 3 and mask_np.shape[0] == 1:
-            return (mask_np[0] > 0.5)
-        if mask_np.ndim == 2:
-            return (mask_np > 0.5)
+        # 支持 [1, 1, H, W]、[1, 3, H, W]、[1, H, W, 1]、[1, H, W, 3]、[1, H, W]、[H, W]
+        if mask_np.ndim == 4:
+            mask_np = mask_np[0]
         if mask_np.ndim == 3:
-            return (np.any(mask_np > 0.5, axis=0))
-        if mask_np.ndim == 4 and mask_np.shape[0] == 1 and mask_np.shape[-1] == 3:
-            return (mask_np[0, ..., 0] > 0.5)
-        raise ValueError(f"Unsupported mask shape: {mask_np.shape}")
+            if mask_np.shape[0] in [1, 3]:
+                mask_np = mask_np.max(axis=0)
+            elif mask_np.shape[2] in [1, 3]:
+                mask_np = mask_np.max(axis=2)
+        return (mask_np > 0.5)
 
     @staticmethod
     def rgb_to_grayscale_torch(img):
@@ -58,6 +54,7 @@ class BrightnessCorrectionNode:
         print(f"[调试] original_mask shape: {getattr(original_mask, 'shape', None)}, dtype: {getattr(original_mask, 'dtype', None)}")
         print(f"[调试] target_image shape: {getattr(target_image, 'shape', None)}, dtype: {getattr(target_image, 'dtype', None)}")
         print(f"[调试] target_mask shape: {getattr(target_mask, 'shape', None)}, dtype: {getattr(target_mask, 'dtype', None)}")
+
         ori_img = self._ensure_chw(original_image.clone())
         tgt_img = self._ensure_chw(target_image.clone())
         ori_mask_img = self._ensure_chw(original_mask.clone())
@@ -69,7 +66,6 @@ class BrightnessCorrectionNode:
         ori_gray = self.rgb_to_grayscale_torch(ori_img).cpu().numpy().squeeze()
         tgt_gray = self.rgb_to_grayscale_torch(tgt_img).cpu().numpy().squeeze()
 
-        # shape 检查
         if ori_gray.shape != ori_mask.shape:
             raise ValueError(f"original_image灰度图与original_mask尺寸不一致: ori_gray shape={ori_gray.shape}, ori_mask shape={ori_mask.shape}")
         if tgt_gray.shape != tgt_mask.shape:
@@ -80,15 +76,16 @@ class BrightnessCorrectionNode:
 
         if ori_pixels.size == 0 or tgt_pixels.size == 0:
             print("Mask 区域为空，跳过校正")
-            return (tgt_img,)
+            corrected = tgt_img
+        else:
+            factor = float(ori_pixels.mean() / tgt_pixels.mean())
+            corrected = tgt_img.clone()
+            mask_tensor = torch.from_numpy(tgt_mask.astype(np.float32)).to(tgt_img.device)
+            if mask_tensor.ndim == 2:
+                mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+            corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
 
-        factor = float(ori_pixels.mean() / tgt_pixels.mean())
-
-        corrected = tgt_img.clone()
-        # 只对 mask 区域做亮度调整
-        mask_tensor = torch.from_numpy(tgt_mask.astype(np.float32)).to(tgt_img.device)
-        if mask_tensor.ndim == 2:
-            mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
-        corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
-
-        return (corrected,)
+        # 输出标准化处理：RGB、float32、[0, 1]、[1, 3, H, W]
+        if corrected.shape[1] == 1:
+            corrected = corrected.repeat(1, 3, 1, 1)
+        corrected = corrected.to

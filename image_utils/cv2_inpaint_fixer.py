@@ -20,20 +20,28 @@ class CV2InpaintEdgeFixer:
     CATEGORY = "inpainting"
 
     def run(self, image, edge_mask, inpaintRadius, method):
-        img_tensor = image[0]  # shape: [3, H, W]
-        mask_tensor = edge_mask[0, 0]  # shape: [H, W]
+        img_tensor = image[0]            # [3, H, W]
+        mask_tensor = edge_mask[0, 0]    # [H, W]
 
-        img_np = img_tensor.cpu().numpy().transpose(1, 2, 0)  # [H, W, 3]
-        mask_np = (mask_tensor.cpu().numpy() > 0.5).astype(np.uint8) * 255  # [H, W]
+        # Convert to numpy image
+        img_np = img_tensor.detach().cpu().numpy().transpose(1, 2, 0)  # [H, W, 3]
+        img_bgr = (img_np * 255).clip(0, 255).astype(np.uint8)[..., ::-1]  # BGR
 
-        # Convert to uint8 and BGR
-        img_bgr = (img_np * 255).astype(np.uint8)[..., ::-1]  # RGB → BGR
+        mask_np = (mask_tensor.detach().cpu().numpy() > 0.5).astype(np.uint8) * 255  # [H, W]
 
+        # Confirm OpenCV input types
+        assert img_bgr.dtype == np.uint8 and img_bgr.shape[2] == 3
+        assert mask_np.dtype == np.uint8 and len(mask_np.shape) == 2
+
+        # Choose method
         flags = cv2.INPAINT_TELEA if method == "telea" else cv2.INPAINT_NS
-        inpainted_bgr = cv2.inpaint(img_bgr, mask_np, inpaintRadius, flags=flags)  # BGR uint8
 
-        # Convert back to RGB float32 for IMAGE
-        inpainted_rgb = inpainted_bgr[..., ::-1].astype(np.float32) / 255.0  # BGR → RGB
+        # Do inpaint
+        inpainted_bgr = cv2.inpaint(img_bgr, mask_np, inpaintRadius, flags)
+
+        # Convert back to tensor (RGB, float32)
+        inpainted_rgb = inpainted_bgr[..., ::-1].astype(np.float32) / 255.0
         img_tensor_out = torch.from_numpy(inpainted_rgb.transpose(2, 0, 1)).unsqueeze(0).to(dtype=img_tensor.dtype)
 
-        return (img_tensor_out, inpainted_bgr)  # 第二个输出为 BGR np.uint8
+        return (img_tensor_out, inpainted_bgr)
+

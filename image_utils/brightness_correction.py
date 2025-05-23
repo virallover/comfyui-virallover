@@ -3,17 +3,34 @@ import numpy as np
 
 class BrightnessCorrectionNode:
     @staticmethod
-    def _to_single_mask(mask_tensor):
-        mask_np = mask_tensor.cpu().numpy()
-        # 支持 [1, 1, H, W]、[1, 3, H, W]、[1, H, W, 1]、[1, H, W, 3]、[1, H, W]、[H, W]
-        if mask_np.ndim == 4:
-            mask_np = mask_np[0]
-        if mask_np.ndim == 3:
-            if mask_np.shape[0] in [1, 3]:
-                mask_np = mask_np.max(axis=0)
-            elif mask_np.shape[2] in [1, 3]:
-                mask_np = mask_np.max(axis=2)
-        return (mask_np > 0.5)
+    def _to_single_mask(mask_tensor, threshold=0.5):
+        """
+        自动将任意图片/张量转为二值 mask，支持 [1,3,H,W]、[1,H,W,3]、[1,H,W]、[H,W]、[1,1,H,W]、[1,H,W,1] 等格式
+        """
+        arr = mask_tensor.detach().cpu().float().numpy()
+        # [1, H, W, 3] -> [1, 3, H, W]
+        if arr.ndim == 4 and arr.shape[-1] == 3:
+            arr = arr.transpose(0, 3, 1, 2)
+        # [1, 3, H, W] 或 [3, H, W]
+        if arr.ndim == 4 and arr.shape[1] == 3:
+            arr = arr.mean(axis=1, keepdims=True)  # [1, 1, H, W]
+        elif arr.ndim == 4 and arr.shape[1] == 1:
+            pass  # [1, 1, H, W]
+        elif arr.ndim == 3 and arr.shape[0] == 1:
+            arr = arr  # [1, H, W]
+        elif arr.ndim == 3 and arr.shape[2] == 1:
+            arr = arr.transpose(2, 0, 1)  # [1, H, W]
+        elif arr.ndim == 3 and arr.shape[2] == 3:
+            arr = arr.transpose(2, 0, 1).mean(axis=0, keepdims=True)  # [1, H, W]
+        elif arr.ndim == 2:
+            arr = arr[None, ...]  # [1, H, W]
+        # 归一化到0~1
+        if arr.max() > 1.1:
+            arr = arr / 255.0
+        mask = (arr > threshold)
+        # squeeze到[H,W]
+        mask = mask.squeeze()
+        return mask
 
     @staticmethod
     def rgb_to_grayscale_torch(img):
@@ -38,9 +55,9 @@ class BrightnessCorrectionNode:
         return {
             "required": {
                 "original_image": ("IMAGE",),
-                "original_mask": ("IMAGE",),
+                "original_mask": ("MASK",),
                 "target_image": ("IMAGE",),
-                "target_mask": ("IMAGE",),
+                "target_mask": ("MASK",),
             }
         }
 

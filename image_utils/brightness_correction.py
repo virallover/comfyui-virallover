@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image
+import os
 
 class BrightnessCorrectionNode:
     @staticmethod
@@ -121,8 +122,10 @@ class BrightnessCorrectionNode:
             if arr.ndim == 3 and arr.shape[0] == 3:
                 arr = arr.transpose(1, 2, 0)
             img = Image.fromarray(arr)
+            # 自动创建目录
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             img.save(path)
 
-        save_debug_image(corrected, '/tmp/debug_corrected.jpg')
+        save_debug_image(corrected, 'output/debug_corrected.jpg')
 
         return (corrected,)

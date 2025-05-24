@@ -69,6 +69,7 @@ class BrightnessCorrectionNode:
                 "original_mask": ("MASK",),
                 "target_image": ("IMAGE",),
                 "target_mask": ("MASK",),
+                "mode": (["normal", "noise"], {"default": "normal"}),
             }
         }
 
@@ -89,7 +90,7 @@ class BrightnessCorrectionNode:
         print(f"save debug image to {path}")
         img.save(path)
 
-    def adjust_brightness(self, original_image, original_mask, target_image, target_mask):
+    def adjust_brightness(self, original_image, original_mask, target_image, target_mask, mode="normal"):
         print(f"[调试] original_image shape: {getattr(original_image, 'shape', None)}, dtype: {getattr(original_image, 'dtype', None)}")
         print(f"[调试] original_mask shape: {getattr(original_mask, 'shape', None)}, dtype: {getattr(original_mask, 'dtype', None)}")
         print(f"[调试] target_image shape: {getattr(target_image, 'shape', None)}, dtype: {getattr(target_image, 'dtype', None)}")
@@ -120,7 +121,6 @@ class BrightnessCorrectionNode:
         if ori_pixels.size == 0 or tgt_pixels.size == 0:
             print("Mask 区域为空，跳过校正")
         else:
-            factor = float(ori_pixels.mean() / tgt_pixels.mean())
             mask_tensor = torch.from_numpy(tgt_mask.astype(np.float32)).to(corrected.device)
             if mask_tensor.ndim == 2:
                 mask_tensor = mask_tensor[None, ...]
@@ -128,9 +128,16 @@ class BrightnessCorrectionNode:
                 mask_tensor = mask_tensor[None, ...]
             mask_tensor = mask_tensor.expand(-1, 3, -1, -1)
             print(f"corrected.shape={corrected.shape}, mask_tensor.shape={mask_tensor.shape}")
-            self.save_debug_image(corrected, 'output/debug_before_apply.jpg')
-            self.save_debug_image(mask_tensor, 'output/debug_mask.jpg')
-            corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
+
+            if mode == "normal":
+                factor = float(ori_pixels.mean() / tgt_pixels.mean())
+                corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
+            elif mode == "noise":
+                mean = ori_pixels.mean()
+                std = ori_pixels.std() * 0.05  # 噪声强度可调
+                noise = torch.normal(mean, std, size=corrected.shape).to(corrected.device)
+                noise = noise.clamp(0, 1)
+                corrected = corrected * (1 - mask_tensor) + noise * mask_tensor
 
         # === 保证输出格式和 target_image 一致 ===
         if len(target_image.shape) == 4 and target_image.shape[-1] == 3:
@@ -138,5 +145,4 @@ class BrightnessCorrectionNode:
         corrected = corrected.clamp(0, 1).to(torch.float32)
         assert corrected.shape == target_image.shape, f"corrected shape error: {corrected.shape}, target_image shape: {target_image.shape}"
 
-        self.save_debug_image(corrected, 'output/debug_corrected.jpg')
         return (corrected,)

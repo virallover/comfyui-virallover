@@ -115,11 +115,14 @@ class BrightnessCorrectionNode:
             factor = float(ori_pixels.mean() / tgt_pixels.mean())
             mask_tensor = torch.from_numpy(tgt_mask.astype(np.float32)).to(corrected.device)
             if mask_tensor.ndim == 2:
-                mask_tensor = mask_tensor.unsqueeze(0)
+                mask_tensor = mask_tensor[None, ...]
             if mask_tensor.ndim == 3:
-                mask_tensor = mask_tensor.unsqueeze(0)
-            mask_tensor = mask_tensor.expand(-1, corrected.shape[1], -1, -1)
-            # 此时 mask_tensor.shape == corrected.shape
+                mask_tensor = mask_tensor[None, ...]
+            mask_tensor = mask_tensor.expand(-1, 3, -1, -1)
+            print(f"corrected.shape={corrected.shape}, mask_tensor.shape={mask_tensor.shape}")
+            # debug: 保存mask_tensor和corrected
+            self.save_debug_image(corrected, 'output/debug_before_apply.jpg')
+            self.save_debug_image(mask_tensor, 'output/debug_mask.jpg')
             corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
 
         print(f"corrected.shape={corrected.shape}, mask_tensor.shape={mask_tensor.shape}")

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from PIL import Image
 
 class BrightnessCorrectionNode:
     @staticmethod
@@ -111,4 +112,17 @@ class BrightnessCorrectionNode:
             corrected = corrected.repeat(1, 3, 1, 1)
         corrected = corrected.clamp(0, 1).to(torch.float32)
         assert corrected.shape[1] == 3, f"corrected shape error: {corrected.shape}"
+
+        def save_debug_image(tensor, path):
+            arr = tensor.detach().cpu().numpy()
+            arr = np.clip(arr, 0, 1)
+            arr = (arr * 255).astype(np.uint8)
+            arr = arr.squeeze()
+            if arr.ndim == 3 and arr.shape[0] == 3:
+                arr = arr.transpose(1, 2, 0)
+            img = Image.fromarray(arr)
+            img.save(path)
+
+        save_debug_image(corrected, '/tmp/debug_corrected.jpg')
+
         return (corrected,)

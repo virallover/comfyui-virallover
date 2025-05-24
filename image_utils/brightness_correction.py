@@ -74,5 +74,48 @@ class BrightnessCorrectionNode:
         print(f"[调试] target_image shape: {getattr(target_image, 'shape', None)}, dtype: {getattr(target_image, 'dtype', None)}")
         print(f"[调试] target_mask shape: {getattr(target_mask, 'shape', None)}, dtype: {getattr(target_mask, 'dtype', None)}")
 
-        # 直接返回 target_image 进行兼容性实验
-        return (target_image,)
+        # 以 target_image 为源数据，拷贝一份
+        corrected = target_image.clone()
+
+        # 保证输入格式统一
+        ori_img = self._ensure_chw(original_image.clone())
+        tgt_img = self._ensure_chw(target_image.clone())
+        ori_mask_img = self._ensure_chw(original_mask.clone())
+        tgt_mask_img = self._ensure_chw(target_mask.clone())
+
+        ori_mask = self._to_single_mask(ori_mask_img)
+        tgt_mask = self._to_single_mask(tgt_mask_img)
+
+        ori_gray = self.rgb_to_grayscale_torch(ori_img).cpu().numpy().squeeze()
+        tgt_gray = self.rgb_to_grayscale_torch(tgt_img).cpu().numpy().squeeze()
+
+        if ori_gray.shape != ori_mask.shape:
+            raise ValueError(f"original_image灰度图与original_mask尺寸不一致: ori_gray shape={ori_gray.shape}, ori_mask shape={ori_mask.shape}")
+        if tgt_gray.shape != tgt_mask.shape:
+            raise ValueError(f"target_image灰度图与target_mask尺寸不一致: tgt_gray shape={tgt_gray.shape}, tgt_mask shape={tgt_mask.shape}")
+
+        ori_pixels = ori_gray[ori_mask]
+        tgt_pixels = tgt_gray[tgt_mask]
+
+        if ori_pixels.size == 0 or tgt_pixels.size == 0:
+            print("Mask 区域为空，跳过校正")
+        else:
+            factor = float(ori_pixels.mean() / tgt_pixels.mean())
+            mask_tensor = torch.from_numpy(tgt_mask.astype(np.float32)).to(corrected.device)
+            if mask_tensor.ndim == 2:
+                mask_tensor = mask_tensor.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+            if mask_tensor.shape[1] == 1 and corrected.shape[1] == 3:
+                mask_tensor = mask_tensor.repeat(1, 3, 1, 1)  # [1, 3, H, W]
+            elif mask_tensor.shape[1] != corrected.shape[1]:
+                mask_tensor = mask_tensor.expand(-1, corrected.shape[1], -1, -1)
+            corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
+
+        # === 保证输出格式和 target_image 一致 ===
+        if corrected.shape[1] == 1:
+            corrected = corrected.repeat(1, 3, 1, 1)
+        elif corrected.shape[1] != 3:
+            corrected = corrected[:, :3, :, :]
+        corrected = corrected.clamp(0, 1).to(torch.float32)
+        assert corrected.shape == target_image.shape, f"corrected shape error: {corrected.shape}, target_image shape: {target_image.shape}"
+
+        return (corrected,)

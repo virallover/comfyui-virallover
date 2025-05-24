@@ -68,6 +68,17 @@ class BrightnessCorrectionNode:
     FUNCTION = "adjust_brightness"
     CATEGORY = "Image Processing"
 
+    def save_debug_image(self, tensor, path):
+        arr = tensor.detach().cpu().numpy()
+        arr = np.clip(arr, 0, 1)
+        arr = (arr * 255).astype(np.uint8)
+        arr = arr.squeeze()
+        if arr.ndim == 3 and arr.shape[0] == 3:
+            arr = arr.transpose(1, 2, 0)
+        img = Image.fromarray(arr)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        img.save(path)
+
     def adjust_brightness(self, original_image, original_mask, target_image, target_mask):
         print(f"[调试] original_image shape: {getattr(original_image, 'shape', None)}, dtype: {getattr(original_image, 'dtype', None)}")
         print(f"[调试] original_mask shape: {getattr(original_mask, 'shape', None)}, dtype: {getattr(original_mask, 'dtype', None)}")
@@ -120,4 +131,6 @@ class BrightnessCorrectionNode:
         corrected = corrected.clamp(0, 1).to(torch.float32)
         assert corrected.shape == target_image.shape, f"corrected shape error: {corrected.shape}, target_image shape: {target_image.shape}"
 
+        # 保存 debug 图片
+        self.save_debug_image(corrected, 'output/debug_corrected.jpg')
         return (corrected,)

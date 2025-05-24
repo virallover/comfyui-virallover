@@ -77,6 +77,7 @@ class BrightnessCorrectionNode:
             arr = arr.transpose(1, 2, 0)
         img = Image.fromarray(arr)
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        print(f"save debug image to {path}")
         img.save(path)
 
     def adjust_brightness(self, original_image, original_mask, target_image, target_mask):

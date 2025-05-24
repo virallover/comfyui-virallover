@@ -47,10 +47,19 @@ class BrightnessCorrectionNode:
     @staticmethod
     def _ensure_chw(tensor):
         arr = tensor.cpu().numpy()
-        if arr.ndim == 4 and arr.shape[-1] == 3:  # [1, H, W, 3]
-            arr = arr.transpose(0, 3, 1, 2)  # -> [1, 3, H, W]
-            return torch.from_numpy(arr).to(tensor.device)
-        return tensor
+        # [1, H, W, 3] -> [1, 3, H, W]
+        if arr.ndim == 4 and arr.shape[-1] == 3:
+            arr = arr.transpose(0, 3, 1, 2)
+        # [H, W, 3] -> [1, 3, H, W]
+        elif arr.ndim == 3 and arr.shape[-1] == 3:
+            arr = arr.transpose(2, 0, 1)[None, ...]
+        # [1, H, W] -> [1, 3, H, W]
+        elif arr.ndim == 3 and arr.shape[0] == 1:
+            arr = np.repeat(arr, 3, axis=0)[None, ...]
+        # [H, W] -> [1, 3, H, W]
+        elif arr.ndim == 2:
+            arr = np.stack([arr, arr, arr], axis=0)[None, ...]
+        return torch.from_numpy(arr).to(tensor.device).float()
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -86,14 +95,13 @@ class BrightnessCorrectionNode:
         print(f"[调试] target_image shape: {getattr(target_image, 'shape', None)}, dtype: {getattr(target_image, 'dtype', None)}")
         print(f"[调试] target_mask shape: {getattr(target_mask, 'shape', None)}, dtype: {getattr(target_mask, 'dtype', None)}")
 
-        # 以 target_image 为源数据，拷贝一份
-        corrected = target_image.clone()
-
         # 保证输入格式统一
         ori_img = self._ensure_chw(original_image.clone())
         tgt_img = self._ensure_chw(target_image.clone())
         ori_mask_img = self._ensure_chw(original_mask.clone())
         tgt_mask_img = self._ensure_chw(target_mask.clone())
+
+        corrected = tgt_img.clone()  # 用 NCHW 格式
 
         ori_mask = self._to_single_mask(ori_mask_img)
         tgt_mask = self._to_single_mask(tgt_mask_img)
@@ -120,21 +128,15 @@ class BrightnessCorrectionNode:
                 mask_tensor = mask_tensor[None, ...]
             mask_tensor = mask_tensor.expand(-1, 3, -1, -1)
             print(f"corrected.shape={corrected.shape}, mask_tensor.shape={mask_tensor.shape}")
-            # debug: 保存mask_tensor和corrected
             self.save_debug_image(corrected, 'output/debug_before_apply.jpg')
             self.save_debug_image(mask_tensor, 'output/debug_mask.jpg')
             corrected = corrected * (1 - mask_tensor) + torch.clamp(corrected * factor, 0, 1) * mask_tensor
 
-        print(f"corrected.shape={corrected.shape}, mask_tensor.shape={mask_tensor.shape}")
-
         # === 保证输出格式和 target_image 一致 ===
-        if corrected.shape[1] == 1:
-            corrected = corrected.repeat(1, 3, 1, 1)
-        elif corrected.shape[1] != 3:
-            corrected = corrected[:, :3, :, :]
+        if len(target_image.shape) == 4 and target_image.shape[-1] == 3:
+            corrected = corrected.permute(0, 2, 3, 1)  # [1, 3, H, W] -> [1, H, W, 3]
         corrected = corrected.clamp(0, 1).to(torch.float32)
         assert corrected.shape == target_image.shape, f"corrected shape error: {corrected.shape}, target_image shape: {target_image.shape}"
 
-        # 保存 debug 图片
         self.save_debug_image(corrected, 'output/debug_corrected.jpg')
         return (corrected,)

@@ -54,7 +54,6 @@ class EdgeNoise:
     CATEGORY = "Image Processing"
 
     def add_noise(self, image, mask, strength):
-        # 记录输入格式
         input_is_nhwc = (image.ndim == 4 and image.shape[-1] == 3)
         device = image.device
 
@@ -62,12 +61,23 @@ class EdgeNoise:
         image_chw = self._ensure_chw(image)
         mask_chw = self._ensure_mask_chw(mask, image_chw.shape, device)
 
-        # 添加高斯噪声
-        noise = torch.randn_like(image_chw) * strength
-        noisy_image = image_chw * (1 - mask_chw) + (image_chw + noise).clamp(0, 1) * mask_chw
-        noisy_image = noisy_image.clamp(0, 1)
+        # 计算亮度（Y通道，仿照灰度公式）
+        # Y = 0.299*R + 0.587*G + 0.114*B
+        Y = 0.299 * image_chw[:, 0:1, :, :] + 0.587 * image_chw[:, 1:2, :, :] + 0.114 * image_chw[:, 2:3, :, :]
+
+        # 只对亮度加噪声
+        noise = torch.randn_like(Y) * strength
+        Y_noised = (Y * (1 - mask_chw[:, 0:1, :, :]) + (Y + noise).clamp(0, 1) * mask_chw[:, 0:1, :, :]).clamp(0, 1)
+
+        # 用原始色彩和新亮度重建RGB
+        # 线性重建法（近似）：保持色彩比例
+        eps = 1e-6
+        Y_orig = Y + eps
+        ratio = Y_noised / Y_orig
+        ratio = ratio.expand_as(image_chw)
+        noised_image = (image_chw * ratio).clamp(0, 1)
 
         # 输出格式还原
         if input_is_nhwc:
-            noisy_image = noisy_image.permute(0, 2, 3, 1)  # [1, 3, H, W] -> [1, H, W, 3]
-        return (noisy_image,)
+            noised_image = noised_image.permute(0, 2, 3, 1)
+        return (noised_image,)

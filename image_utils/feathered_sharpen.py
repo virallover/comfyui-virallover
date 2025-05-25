@@ -67,9 +67,13 @@ class FeatheredSharpen:
 
         # === Step 1: Generate edge feather weight (只锐化边缘带) ===
         # msk: 人物区域为1，背景为0
-        dist = cv2.distanceTransform((msk * 255).astype(np.uint8), cv2.DIST_L2, 5)
-        weight = np.clip((feather_radius - dist) / feather_radius, 0, 1)[..., None]  # [H, W, 1]
-        weight = weight * msk[..., None]  # 只在mask区域内有效，背景为0
+        kernel = np.ones((3, 3), np.uint8)  # 3x3核，扩展1像素，迭代2次就是2像素
+        dilated_mask = cv2.dilate((msk * 255).astype(np.uint8), kernel, iterations=2) / 255.0  # [H, W], float32, 人物+外扩2像素为1
+
+        # 只在 dilated_mask 区域做 distanceTransform
+        dist = cv2.distanceTransform((dilated_mask * 255).astype(np.uint8), cv2.DIST_L2, 5)
+        weight = np.clip((feather_radius - dist) / feather_radius, 0, 1)[..., None]
+        weight = weight * dilated_mask[..., None]  # 只在扩展后区域内有效
 
         # === Step 2: Unsharp Mask ===
         blurred = cv2.GaussianBlur(img, (0, 0), sigmaX=3)

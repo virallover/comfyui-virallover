@@ -65,7 +65,7 @@ class FeatheredSharpen:
         img = np.transpose(img, (1, 2, 0))  # -> [H, W, 3]
         img = np.clip(img, 0, 1)
 
-        # === Step 1: Generate edge feather weight (只锐化人物边缘带) ===
+        # === Step 1: Generate edge feather weight (只锐化背景边缘带) ===
         # msk: 人物区域为1，背景为0
         inv_mask = 1.0 - msk
         dist = cv2.distanceTransform((inv_mask * 255).astype(np.uint8), cv2.DIST_L2, 5)

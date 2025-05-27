@@ -3,6 +3,7 @@ from .image_utils.depth_fitter import DepthFitter
 from .image_utils.brightness_correction import BrightnessCorrectionNode
 from .image_utils.edge_noise import EdgeNoise
 from .image_utils.feathered_sharpen import FeatheredSharpen
+from .image_utils.apply_brightness_with_mask import ApplyBrightnessFromGrayWithMask
 
 
 # 注册到NODE_CLASS_MAPPINGS
@@ -13,6 +14,7 @@ NODE_CLASS_MAPPINGS = {
     "BrightnessCorrectionNode": BrightnessCorrectionNode,
     "EdgeNoise": EdgeNoise,
     "FeatheredSharpen": FeatheredSharpen,
+    "ApplyBrightnessFromGrayWithMask": ApplyBrightnessFromGrayWithMask,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -21,6 +23,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "BrightnessCorrectionNode": "Brightness Correction",
     "EdgeNoise": "Edge Noise",
     "FeatheredSharpen": "Feathered Sharpen",
+    "ApplyBrightnessFromGrayWithMask": "Apply Brightness From Gray With Mask",
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']

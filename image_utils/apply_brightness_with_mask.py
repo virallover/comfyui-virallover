@@ -61,13 +61,23 @@ class ApplyBrightnessFromGrayWithMask:
         gray = self._ensure_chw(gray_image)
         mask = self._ensure_mask_chw(mask, tgt.shape)
         # 灰度图通道对齐
-        if gray.shape[1] == 1:
-            gray = np.repeat(gray, 3, axis=1)
-        # 尺寸对齐
+        g = gray[0]
+        if g.ndim == 3 and g.shape[0] == 3:
+            g = g.transpose(1, 2, 0)  # [3, H, W] -> [H, W, 3]
+        elif g.ndim == 3 and g.shape[0] == 1:
+            g = np.repeat(g.squeeze(0), 3, axis=0).transpose(1, 2, 0)  # [1, H, W] -> [H, W, 3]
+        elif g.ndim == 2:
+            g = np.stack([g, g, g], axis=-1)  # [H, W] -> [H, W, 3]
+        else:
+            raise ValueError(f"Unsupported gray shape: {g.shape}")
+
+        g = g.astype(np.uint8)
         _, _, h, w = tgt.shape
-        if gray.shape[2:] != (h, w):
-            gray = np.array(Image.fromarray(gray[0].transpose(1,2,0).astype(np.uint8)).resize((w, h), Image.BILINEAR)).astype(np.float32)
-            gray = gray.transpose(2,0,1)[None, ...]
+        if g.shape[1:] != (h, w):
+            g = np.array(Image.fromarray(g).resize((w, h), Image.BILINEAR)).astype(np.float32)
+            g = g if g.ndim == 3 else np.stack([g]*3, axis=-1)
+            gray = g[None, ...]  # [1, H, W, 3]
+            gray = gray.transpose(0, 3, 1, 2)  # [1, 3, H, W]
         if mask.shape[2:] != (h, w):
             mask_img = (mask[0,0]*255).astype(np.uint8)
             mask_img = np.array(Image.fromarray(mask_img).resize((w, h), Image.BILINEAR)) / 255.0

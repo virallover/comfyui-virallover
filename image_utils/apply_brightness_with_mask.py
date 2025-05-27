@@ -90,5 +90,4 @@ class ApplyBrightnessFromGrayWithMask:
         # 输出还原为输入格式
         if input_is_nhwc:
             output = output.transpose(0,2,3,1)  # [1,3,H,W]->[1,H,W,3]
-        output_img = Image.fromarray(output[0])
-        return (output_img,)
+        return (output[0],)

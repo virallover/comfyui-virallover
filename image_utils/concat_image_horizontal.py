@@ -103,5 +103,12 @@ class ConcatHorizontalWithMask:
         # 输出格式还原
         if input_is_nhwc:
             out_image = out_image.permute(0, 2, 3, 1)  # [1, 3, H, W] -> [1, H, W, 3]
-            out_mask = out_mask.permute(0, 2, 3, 1)    # [1, C, H, W] -> [1, H, W, C]
+            # 保证mask为[1, H, W, 1]，便于预览和和image宽高一致
+            if out_mask.shape[1] != 1:
+                out_mask = out_mask[:, :1, :, :]
+            out_mask = out_mask.permute(0, 2, 3, 1)    # [1, 1, H, W] -> [1, H, W, 1]
+        else:
+            # 保证mask为[1, 1, H, W]，和image一致
+            if out_mask.shape[1] != 1:
+                out_mask = out_mask[:, :1, :, :]
         return (out_image, out_mask, output_width, output_height, slice_width)

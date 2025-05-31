@@ -72,6 +72,15 @@ class ConcatHorizontalWithMask:
         slice_width = left_width
 
         # mask处理
+        if left_mask is not None:
+            # 检查高度
+            mask_h = left_mask.shape[2] if left_mask.ndim == 4 else (left_mask.shape[1] if left_mask.ndim == 3 else left_mask.shape[0])
+            if mask_h != H:
+                raise ValueError(f"left_mask高度({mask_h})与图片高度({H})不一致")
+        if right_mask is not None:
+            mask_h = right_mask.shape[2] if right_mask.ndim == 4 else (right_mask.shape[1] if right_mask.ndim == 3 else right_mask.shape[0])
+            if mask_h != H:
+                raise ValueError(f"right_mask高度({mask_h})与图片高度({H})不一致")
         if left_mask is None:
             left_mask_chw = torch.zeros((1, 1, H, left_width), device=device)
             left_c = 1
@@ -114,5 +123,9 @@ class ConcatHorizontalWithMask:
         elif out_image.ndim == 4 and out_image.shape[1] == 3:
             if out_mask.ndim == 4 and out_mask.shape[-1] == 1:
                 out_mask = out_mask.permute(0, 3, 1, 2)
+
+        # 检查最终mask的宽高和输出图片一致
+        if out_mask.shape[-2:] != out_image.shape[-2:]:
+            raise ValueError(f"输出mask的宽高{out_mask.shape[-2:]}与输出图片的宽高{out_image.shape[-2:]}不一致")
 
         return (out_image, out_mask, output_width, output_height, slice_width)

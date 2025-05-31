@@ -100,27 +100,19 @@ class ConcatHorizontalWithMask:
         if out_mask.shape[1] != left_c:
             out_mask = out_mask[:, :left_c, :, :]
 
-        # 输出格式还原
-        if input_is_nhwc:
-            out_image = out_image.permute(0, 2, 3, 1)  # [1, 3, H, W] -> [1, H, W, 3]
-            # 保证mask为[1, H, W, 1]，便于预览和和image宽高一致
-            if out_mask.shape[1] != 1:
+        # 保证mask为单通道
+        if out_mask.shape[1] != 1 and out_mask.shape[-1] != 1:
+            if out_mask.shape[1] > 1:
                 out_mask = out_mask[:, :1, :, :]
-            out_mask = out_mask.permute(0, 2, 3, 1)    # [1, 1, H, W] -> [1, H, W, 1]
-        else:
-            # 保证mask为[1, 1, H, W]，和image一致
-            if out_mask.shape[1] != 1:
-                out_mask = out_mask[:, :1, :, :]
+            elif out_mask.shape[-1] > 1:
+                out_mask = out_mask[..., :1]
 
-        # 如果image是NHWC，mask也强制NHWC
+        # 保证mask和image排列一致
         if out_image.ndim == 4 and out_image.shape[-1] == 3:
-            # [1, H, W, 3]
             if out_mask.ndim == 4 and out_mask.shape[1] == 1:
-                out_mask = out_mask.permute(0, 2, 3, 1)  # [1, 1, H, W] -> [1, H, W, 1]
-        # 如果image是NCHW，mask也强制NCHW
+                out_mask = out_mask.permute(0, 2, 3, 1)
         elif out_image.ndim == 4 and out_image.shape[1] == 3:
-            # [1, 3, H, W]
             if out_mask.ndim == 4 and out_mask.shape[-1] == 1:
-                out_mask = out_mask.permute(0, 3, 1, 2)  # [1, H, W, 1] -> [1, 1, H, W]
+                out_mask = out_mask.permute(0, 3, 1, 2)
 
         return (out_image, out_mask, output_width, output_height, slice_width)

@@ -137,12 +137,12 @@ class ConcatHorizontalWithMask:
         # 调试用shape打印
         print("out_mask shape:", out_mask.shape)
 
-        # 检查最终mask的宽高和输出图片一致
-        if out_mask.shape[1:] != out_image.shape[1:3]:
-            raise ValueError(f"输出mask的宽高{out_mask.shape[1:]}与输出图片的宽高{out_image.shape[1:3]}不一致")
-
         # 输出图片格式转换 [1, 3, H, W] -> [1, H, W, 3]
         if out_image.ndim == 4 and out_image.shape[1] == 3:
             out_image = out_image.permute(0, 2, 3, 1).contiguous()
+
+        # 检查最终mask的宽高和输出图片一致
+        if out_mask.shape[1:] != out_image.shape[1:3]:
+            raise ValueError(f"输出mask的宽高{out_mask.shape[1:]}与输出图片的宽高{out_image.shape[1:3]}不一致")
 
         return (out_image, out_mask, output_width, output_height, slice_width)

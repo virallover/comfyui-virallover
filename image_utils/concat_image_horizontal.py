@@ -129,10 +129,20 @@ class ConcatHorizontalWithMask:
         else:
             output_mask[:, left_width:] = 1.0
         # 保证输出为[1, H, W]，float32
-        out_mask = torch.from_numpy(output_mask).unsqueeze(0).float().to(device)  # [1, H, W]
+        out_mask = torch.from_numpy(output_mask).float().to(device)
+        if out_mask.ndim == 2:
+            out_mask = out_mask.unsqueeze(0)
+        elif out_mask.ndim == 3 and out_mask.shape[0] != 1:
+            out_mask = out_mask[:1]
+        # 调试用shape打印
+        print("out_mask shape:", out_mask.shape)
 
         # 检查最终mask的宽高和输出图片一致
-        if out_mask.shape[-2:] != out_image.shape[-2:]:
-            raise ValueError(f"输出mask的宽高{out_mask.shape[-2:]}与输出图片的宽高{out_image.shape[-2:]}不一致")
+        if out_mask.shape[-2:] != out_image.shape[1:3]:
+            raise ValueError(f"输出mask的宽高{out_mask.shape[-2:]}与输出图片的宽高{out_image.shape[1:3]}不一致")
+
+        # 输出图片格式转换 [1, 3, H, W] -> [1, H, W, 3]
+        if out_image.ndim == 4 and out_image.shape[1] == 3:
+            out_image = out_image.permute(0, 2, 3, 1).contiguous()
 
         return (out_image, out_mask, output_width, output_height, slice_width)

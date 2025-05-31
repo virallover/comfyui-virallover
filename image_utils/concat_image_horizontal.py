@@ -45,6 +45,7 @@ class ConcatHorizontalWithMask:
         }
 
     RETURN_TYPES = ("IMAGE", "MASK", "INT", "INT", "INT")
+    RETURN_NAMES = ("image", "mask", "output_width", "output_height", "slice_width")
     FUNCTION = "concat"
     CATEGORY = "custom/image"
 

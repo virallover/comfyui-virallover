@@ -129,7 +129,7 @@ class ConcatHorizontalWithMask:
         else:
             output_mask[:, left_width:] = 1.0
         # 保证输出为[1, H, W]，float32
-        out_mask = torch.from_numpy(output_mask).to(device).unsqueeze(0).float()
+        out_mask = torch.from_numpy(output_mask).unsqueeze(0).float().to(device)  # [1, H, W]
 
         # 检查最终mask的宽高和输出图片一致
         if out_mask.shape[-2:] != out_image.shape[-2:]:

@@ -74,19 +74,34 @@ class ConcatHorizontalWithMask:
         # mask处理
         if left_mask is None:
             left_mask_chw = torch.zeros((1, 1, H, left_width), device=device)
+            left_c = 1
         else:
             left_mask_chw = _ensure_mask_chw(left_mask, left_image_chw.shape, device)
+            left_c = left_mask_chw.shape[1]
         if right_mask is None:
             right_mask_chw = torch.ones((1, 1, H, right_width), device=device)
+            right_c = 1
         else:
             right_mask_chw = _ensure_mask_chw(right_mask, right_image_chw.shape, device)
+            right_c = right_mask_chw.shape[1]
+
+        # 对齐channel数（以最大为准）
+        max_c = max(left_c, right_c)
+        if left_c != max_c:
+            left_mask_chw = left_mask_chw.repeat(1, max_c // left_c, 1, 1)
+        if right_c != max_c:
+            right_mask_chw = right_mask_chw.repeat(1, max_c // right_c, 1, 1)
 
         # 横向拼接
         out_image = torch.cat([left_image_chw, right_image_chw], dim=3)
         out_mask = torch.cat([left_mask_chw, right_mask_chw], dim=3)
 
+        # 输出mask通道数和left_mask一致（如果left_mask没输入则为1）
+        if out_mask.shape[1] != left_c:
+            out_mask = out_mask[:, :left_c, :, :]
+
         # 输出格式还原
         if input_is_nhwc:
             out_image = out_image.permute(0, 2, 3, 1)  # [1, 3, H, W] -> [1, H, W, 3]
-            out_mask = out_mask.permute(0, 2, 3, 1)    # [1, 1, H, W] -> [1, H, W, 1]
+            out_mask = out_mask.permute(0, 2, 3, 1)    # [1, C, H, W] -> [1, H, W, C]
         return (out_image, out_mask, output_width, output_height, slice_width)

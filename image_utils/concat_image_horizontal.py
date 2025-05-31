@@ -111,4 +111,16 @@ class ConcatHorizontalWithMask:
             # 保证mask为[1, 1, H, W]，和image一致
             if out_mask.shape[1] != 1:
                 out_mask = out_mask[:, :1, :, :]
+
+        # 如果image是NHWC，mask也强制NHWC
+        if out_image.ndim == 4 and out_image.shape[-1] == 3:
+            # [1, H, W, 3]
+            if out_mask.ndim == 4 and out_mask.shape[1] == 1:
+                out_mask = out_mask.permute(0, 2, 3, 1)  # [1, 1, H, W] -> [1, H, W, 1]
+        # 如果image是NCHW，mask也强制NCHW
+        elif out_image.ndim == 4 and out_image.shape[1] == 3:
+            # [1, 3, H, W]
+            if out_mask.ndim == 4 and out_mask.shape[-1] == 1:
+                out_mask = out_mask.permute(0, 3, 1, 2)  # [1, H, W, 1] -> [1, 1, H, W]
+
         return (out_image, out_mask, output_width, output_height, slice_width)

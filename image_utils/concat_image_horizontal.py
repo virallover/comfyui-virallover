@@ -128,4 +128,26 @@ class ConcatHorizontalWithMask:
         if out_mask.shape[-2:] != out_image.shape[-2:]:
             raise ValueError(f"输出mask的宽高{out_mask.shape[-2:]}与输出图片的宽高{out_image.shape[-2:]}不一致")
 
+        # 先还原排列
+        if out_image.ndim == 4 and out_image.shape[-1] == 3:
+            # NHWC
+            if out_mask.ndim == 4 and out_mask.shape[1] == 1:
+                out_mask = out_mask.permute(0, 2, 3, 1)  # [1, 1, H, W] -> [1, H, W, 1]
+        elif out_image.ndim == 4 and out_image.shape[1] == 3:
+            # NCHW
+            if out_mask.ndim == 4 and out_mask.shape[-1] == 1:
+                out_mask = out_mask.permute(0, 3, 1, 2)  # [1, H, W, 1] -> [1, 1, H, W]
+
+        # 最后强制保证mask为4维
+        if out_mask.ndim == 3:
+            # 可能是[1, H, W]，加一维变[1, H, W, 1]
+            out_mask = out_mask.unsqueeze(-1)
+        if out_mask.ndim == 2:
+            # 可能是[H, W]，加两维变[1, H, W, 1]
+            out_mask = out_mask.unsqueeze(0).unsqueeze(-1)
+
+        # 再次检查宽高
+        if out_image.shape[-3:-1] != out_mask.shape[-3:-1]:
+            raise ValueError(f"最终输出mask的宽高{out_mask.shape}与图片{out_image.shape}不一致")
+
         return (out_image, out_mask, output_width, output_height, slice_width)

@@ -5,32 +5,47 @@ from typing import Optional, Tuple
 
 # 复用edge_noise.py的格式转换函数
 
-def _ensure_chw(tensor):
-    arr = tensor.cpu().numpy()
-    if arr.ndim == 4 and arr.shape[-1] == 3:
-        arr = arr.transpose(0, 3, 1, 2)
-    elif arr.ndim == 3 and arr.shape[-1] == 3:
-        arr = arr.transpose(2, 0, 1)[None, ...]
-    elif arr.ndim == 3 and arr.shape[0] == 1:
-        arr = np.repeat(arr, 3, axis=0)[None, ...]
-    elif arr.ndim == 2:
-        arr = np.stack([arr, arr, arr], axis=0)[None, ...]
-    return torch.from_numpy(arr).to(tensor.device).float()
-
-def _ensure_mask_chw(mask, target_shape, device):
-    arr = mask.cpu().numpy()
-    if arr.ndim == 4 and arr.shape[-1] == 1:
-        arr = arr.transpose(0, 3, 1, 2)
-    elif arr.ndim == 3 and arr.shape[0] == 1:
-        arr = arr[None, ...]
-    elif arr.ndim == 2:
-        arr = arr[None, None, ...]
-    mask_tensor = torch.from_numpy(arr).to(device).float()
-    if mask_tensor.shape[1] == 1 and target_shape[1] == 3:
-        mask_tensor = mask_tensor.repeat(1, 3, 1, 1)
-    return mask_tensor
-
 class ConcatHorizontalWithMask:
+    @staticmethod
+    def _ensure_chw(tensor):
+        arr = tensor.cpu().numpy()
+        if arr.ndim == 4 and arr.shape[-1] == 3:
+            arr = arr.transpose(0, 3, 1, 2)
+        elif arr.ndim == 3 and arr.shape[-1] == 3:
+            arr = arr.transpose(2, 0, 1)[None, ...]
+        elif arr.ndim == 3 and arr.shape[0] == 1:
+            arr = np.repeat(arr, 3, axis=0)[None, ...]
+        elif arr.ndim == 2:
+            arr = np.stack([arr, arr, arr], axis=0)[None, ...]
+        return torch.from_numpy(arr).to(tensor.device).float()
+
+    @staticmethod
+    def _ensure_mask_chw(mask, target_shape=None, device=None):
+        # 支持输入[1,1,H,W]、[1,H,W]、[H,W]、[1,H,W,1]、[H,W,1]
+        arr = mask.detach().cpu().numpy() if hasattr(mask, 'detach') else np.array(mask)
+        # 归一化到0~1
+        if arr.max() > 1.1:
+            arr = arr / 255.0
+        # squeeze到[H, W]
+        if arr.ndim == 4 and arr.shape[0] == 1 and arr.shape[1] == 1:
+            arr = arr[0, 0]
+        elif arr.ndim == 4 and arr.shape[0] == 1 and arr.shape[-1] == 1:
+            arr = arr[0, ..., 0]
+        elif arr.ndim == 3 and arr.shape[0] == 1:
+            arr = arr[0]
+        elif arr.ndim == 3 and arr.shape[-1] == 1:
+            arr = arr[..., 0]
+        elif arr.ndim == 2:
+            pass
+        else:
+            raise ValueError(f"Unsupported mask shape: {arr.shape}")
+        # 再加回batch和channel维，变[1,1,H,W]
+        arr = arr[None, None, ...]
+        tensor = torch.from_numpy(arr).float()
+        if device is not None:
+            tensor = tensor.to(device)
+        return tensor
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -61,8 +76,8 @@ class ConcatHorizontalWithMask:
         device = left_image.device
 
         # 转为NCHW
-        left_image_chw = _ensure_chw(left_image)
-        right_image_chw = _ensure_chw(right_image)
+        left_image_chw = self._ensure_chw(left_image)
+        right_image_chw = self._ensure_chw(right_image)
         H = left_image_chw.shape[2]
         assert H == right_image_chw.shape[2], "左右图片高度不一致"
         left_width = left_image_chw.shape[3]
@@ -85,13 +100,19 @@ class ConcatHorizontalWithMask:
             left_mask_chw = torch.zeros((1, 1, H, left_width), device=device)
             left_c = 1
         else:
-            left_mask_chw = _ensure_mask_chw(left_mask, left_image_chw.shape, device)
+            # 归一化处理
+            if left_mask.max() > 1.1:
+                left_mask = left_mask / 255.0
+            left_mask_chw = self._ensure_mask_chw(left_mask, left_image_chw.shape, device)
             left_c = left_mask_chw.shape[1]
         if right_mask is None:
             right_mask_chw = torch.ones((1, 1, H, right_width), device=device)
             right_c = 1
         else:
-            right_mask_chw = _ensure_mask_chw(right_mask, right_image_chw.shape, device)
+            # 归一化处理
+            if right_mask.max() > 1.1:
+                right_mask = right_mask / 255.0
+            right_mask_chw = self._ensure_mask_chw(right_mask, right_image_chw.shape, device)
             right_c = right_mask_chw.shape[1]
 
         # 对齐channel数（以最大为准）
@@ -109,45 +130,16 @@ class ConcatHorizontalWithMask:
         if out_mask.shape[1] != left_c:
             out_mask = out_mask[:, :left_c, :, :]
 
-        # 保证mask为单通道
-        if out_mask.shape[1] != 1 and out_mask.shape[-1] != 1:
-            if out_mask.shape[1] > 1:
-                out_mask = out_mask[:, :1, :, :]
-            elif out_mask.shape[-1] > 1:
-                out_mask = out_mask[..., :1]
-
-        # 保证mask和image排列一致
-        if out_image.ndim == 4 and out_image.shape[-1] == 3:
-            if out_mask.ndim == 4 and out_mask.shape[1] == 1:
-                out_mask = out_mask.permute(0, 2, 3, 1)
-        elif out_image.ndim == 4 and out_image.shape[1] == 3:
-            if out_mask.ndim == 4 and out_mask.shape[-1] == 1:
-                out_mask = out_mask.permute(0, 3, 1, 2)
+        # 最终输出mask只保留[1, H, W]格式
+        if out_mask.ndim == 4 and out_mask.shape[1] == 1:
+            out_mask = out_mask[:, 0, :, :]
+        elif out_mask.ndim == 4 and out_mask.shape[-1] == 1:
+            out_mask = out_mask[..., 0]
+        elif out_mask.ndim == 2:
+            out_mask = out_mask.unsqueeze(0)
 
         # 检查最终mask的宽高和输出图片一致
         if out_mask.shape[-2:] != out_image.shape[-2:]:
             raise ValueError(f"输出mask的宽高{out_mask.shape[-2:]}与输出图片的宽高{out_image.shape[-2:]}不一致")
-
-        # 先还原排列
-        if out_image.ndim == 4 and out_image.shape[-1] == 3:
-            # NHWC
-            if out_mask.ndim == 4 and out_mask.shape[1] == 1:
-                out_mask = out_mask.permute(0, 2, 3, 1)  # [1, 1, H, W] -> [1, H, W, 1]
-        elif out_image.ndim == 4 and out_image.shape[1] == 3:
-            # NCHW
-            if out_mask.ndim == 4 and out_mask.shape[-1] == 1:
-                out_mask = out_mask.permute(0, 3, 1, 2)  # [1, H, W, 1] -> [1, 1, H, W]
-
-        # 最后强制保证mask为4维
-        if out_mask.ndim == 3:
-            # 可能是[1, H, W]，加一维变[1, H, W, 1]
-            out_mask = out_mask.unsqueeze(-1)
-        if out_mask.ndim == 2:
-            # 可能是[H, W]，加两维变[1, H, W, 1]
-            out_mask = out_mask.unsqueeze(0).unsqueeze(-1)
-
-        # 再次检查宽高
-        if out_image.shape[-3:-1] != out_mask.shape[-3:-1]:
-            raise ValueError(f"最终输出mask的宽高{out_mask.shape}与图片{out_image.shape}不一致")
 
         return (out_image, out_mask, output_width, output_height, slice_width)

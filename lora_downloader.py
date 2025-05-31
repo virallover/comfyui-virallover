@@ -39,9 +39,13 @@ class DownloadAndLoadLoraModelOnly:
                 raise Exception("No loras directory found!")
             loras_dir = loras_dirs[0]
             os.makedirs(loras_dir, exist_ok=True)
-            # file_name 现在是文件名
             downloaded_file = os.path.join(loras_dir, file_name)
             temp_file = downloaded_file + ".part"
+
+            # 新增：如果最终文件已存在，直接返回
+            if os.path.exists(downloaded_file):
+                print(f"Lora file already exists: {downloaded_file}")
+                return downloaded_file
 
             # 获取已下载部分大小
             pos = 0

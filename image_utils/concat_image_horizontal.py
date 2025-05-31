@@ -86,57 +86,50 @@ class ConcatHorizontalWithMask:
         output_height = H
         slice_width = left_width
 
-        # mask处理
-        if left_mask is not None:
-            # 检查高度
-            mask_h = left_mask.shape[2] if left_mask.ndim == 4 else (left_mask.shape[1] if left_mask.ndim == 3 else left_mask.shape[0])
-            if mask_h != H:
-                raise ValueError(f"left_mask高度({mask_h})与图片高度({H})不一致")
-        if right_mask is not None:
-            mask_h = right_mask.shape[2] if right_mask.ndim == 4 else (right_mask.shape[1] if right_mask.ndim == 3 else right_mask.shape[0])
-            if mask_h != H:
-                raise ValueError(f"right_mask高度({mask_h})与图片高度({H})不一致")
-        if left_mask is None:
-            left_mask_chw = torch.zeros((1, 1, H, left_width), device=device)
-            left_c = 1
-        else:
-            # 归一化处理
-            if left_mask.max() > 1.1:
-                left_mask = left_mask / 255.0
-            left_mask_chw = self._ensure_mask_chw(left_mask, left_image_chw.shape, device)
-            left_c = left_mask_chw.shape[1]
-        if right_mask is None:
-            right_mask_chw = torch.ones((1, 1, H, right_width), device=device)
-            right_c = 1
-        else:
-            # 归一化处理
-            if right_mask.max() > 1.1:
-                right_mask = right_mask / 255.0
-            right_mask_chw = self._ensure_mask_chw(right_mask, right_image_chw.shape, device)
-            right_c = right_mask_chw.shape[1]
-
-        # 对齐channel数（以最大为准）
-        max_c = max(left_c, right_c)
-        if left_c != max_c:
-            left_mask_chw = left_mask_chw.repeat(1, max_c // left_c, 1, 1)
-        if right_c != max_c:
-            right_mask_chw = right_mask_chw.repeat(1, max_c // right_c, 1, 1)
-
-        # 横向拼接
+        # 横向拼接图片
         out_image = torch.cat([left_image_chw, right_image_chw], dim=3)
-        out_mask = torch.cat([left_mask_chw, right_mask_chw], dim=3)
 
-        # 输出mask通道数和left_mask一致（如果left_mask没输入则为1）
-        if out_mask.shape[1] != left_c:
-            out_mask = out_mask[:, :left_c, :, :]
+        # mask处理
+        # 归一化和格式统一
+        def norm_and_to_hw(mask, width):
+            if mask is None:
+                return None
+            arr = mask.detach().cpu().numpy() if hasattr(mask, 'detach') else np.array(mask)
+            if arr.max() > 1.1:
+                arr = arr / 255.0
+            # squeeze到[H, W]
+            if arr.ndim == 4 and arr.shape[0] == 1 and arr.shape[1] == 1:
+                arr = arr[0, 0]
+            elif arr.ndim == 4 and arr.shape[0] == 1 and arr.shape[-1] == 1:
+                arr = arr[0, ..., 0]
+            elif arr.ndim == 3 and arr.shape[0] == 1:
+                arr = arr[0]
+            elif arr.ndim == 3 and arr.shape[-1] == 1:
+                arr = arr[..., 0]
+            elif arr.ndim == 2:
+                pass
+            else:
+                raise ValueError(f"Unsupported mask shape: {arr.shape}")
+            # 检查宽度
+            if arr.shape[1] != width:
+                raise ValueError(f"mask宽度({arr.shape[1]})与图片宽度({width})不一致")
+            return arr
 
-        # 最终输出mask只保留[1, H, W]格式
-        if out_mask.ndim == 4 and out_mask.shape[1] == 1:
-            out_mask = out_mask[:, 0, :, :]
-        elif out_mask.ndim == 4 and out_mask.shape[-1] == 1:
-            out_mask = out_mask[..., 0]
-        elif out_mask.ndim == 2:
-            out_mask = out_mask.unsqueeze(0)
+        left_mask_hw = norm_and_to_hw(left_mask, left_width) if left_mask is not None else None
+        right_mask_hw = norm_and_to_hw(right_mask, right_width) if right_mask is not None else None
+
+        # 新建output_mask
+        output_mask = np.zeros((H, output_width), dtype=np.float32)
+        if left_mask_hw is not None:
+            output_mask[:, :left_width] = left_mask_hw
+        else:
+            output_mask[:, :left_width] = 0.0
+        if right_mask_hw is not None:
+            output_mask[:, left_width:] = right_mask_hw
+        else:
+            output_mask[:, left_width:] = 1.0
+        # 保证输出为[1, H, W]，float32
+        out_mask = torch.from_numpy(output_mask).to(device).unsqueeze(0).float()
 
         # 检查最终mask的宽高和输出图片一致
         if out_mask.shape[-2:] != out_image.shape[-2:]:

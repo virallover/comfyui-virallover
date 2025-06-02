@@ -5,6 +5,7 @@ from .image_utils.edge_noise import EdgeNoise
 from .image_utils.feathered_sharpen import FeatheredSharpen
 from .image_utils.concat_image_horizontal import ConcatHorizontalWithMask
 from .image_utils.dehalo_alpha_with_mask import DeHaloAlphaWithMaskTorch
+from .image_utils.iterative_dehalo_alpha_with_mask import IterativeDeHaloAlphaWithMaskTorch
 
 
 # 注册到NODE_CLASS_MAPPINGS
@@ -17,6 +18,7 @@ NODE_CLASS_MAPPINGS = {
     "FeatheredSharpen": FeatheredSharpen,
     "ConcatHorizontalWithMask": ConcatHorizontalWithMask,
     "DeHaloAlphaWithMaskTorch": DeHaloAlphaWithMaskTorch,
+    "IterativeDeHaloAlphaWithMaskTorch": IterativeDeHaloAlphaWithMaskTorch,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -27,6 +29,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FeatheredSharpen": "Feathered Sharpen",
     "ConcatHorizontalWithMask": "Concat Horizontal With Mask",
     "DeHaloAlphaWithMaskTorch": "DeHalo Alpha With Mask",
+    "IterativeDeHaloAlphaWithMaskTorch": "Iterative DeHalo Alpha With Mask",
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
